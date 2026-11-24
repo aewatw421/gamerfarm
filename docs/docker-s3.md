@@ -135,17 +135,36 @@ restored anywhere.
 | `S3 404 NoSuchBucket` | The bucket's name (and region) is wrong, or it was never created. |
 | `S3 301` / `PermanentRedirect` | `GAMERFARM_S3_REGION` doesn't match the bucket's region. |
 | `Connection refused` on a `http://` endpoint | The endpoint is wrong, or the store isn't up. |
-| `the state was required and could not be read` | `GAMERFARM_S3_REQUIRED` is on (the default) and the bucket didn't answer. The app exits rather than run on defaults. Fix the bucket, or set it to `0`. |
+| `cloud: couldn't read s3://... - ...` then `nothing was written to it either` | `GAMERFARM_S3_REQUIRED` is on (the default) and the bucket didn't answer: the app exits rather than run on defaults that would be saved over the real settings. Fix the bucket, or set it to `0` to start anyway (that run then keeps its state in the container and does not touch the bucket). |
 | Unknown `x-amz-...` errors from a self-hosted store | It probably doesn't do SigV4 with a payload hash. Use `GAMERFARM_S3_VERBOSE=1` and its own log. |
 
-A dry run, without touching the app: `docker run --rm -e ... <image> --help` won't do it - but the start itself is
-the check, and it says exactly what failed before it reads a single setting.
+The start itself is the check: it says exactly what failed - code, bucket, endpoint - before it reads a single setting.
+
+## The image
+
+`docker-compose.s3.example.yml` uses `ghcr.io/aewatw421/gamerfarm:latest`, built by
+`.github/workflows/docker-image.yml` on every push to `main` and on every `v*` tag. It is a multi-arch image
+(`linux/amd64` and `linux/arm64`, so a Pi or an Apple Silicon host runs it natively), and the workflow only publishes
+after the state test below has passed against it. Tags: `latest` and `main` for the default branch, the tag name for
+a release (`v2.0.3` → `2.0.3`), and `sha-<short>` for the exact commit.
+
+```
+docker pull ghcr.io/aewatw421/gamerfarm:latest
+```
 
 ## How it is built
 
 `src/GamerFarm/Core/S3Store.cs` is a small SigV4 client over `HttpClient` (GET, PUT, DELETE, ListObjectsV2) - no AWS
 SDK, so the image gains no dependency and any S3-compatible store works. `src/GamerFarm/Core/CloudSync.cs` is the
 pull/push engine: the watcher, the sweep, the compares (size, write time, MD5 of a file last put there), the delete
-guard, and the shutdown flush. `tests/s3-mock.mjs` is a SigV4-verifying stand-in for a bucket, used by the tests;
-`tests/docker-s3-smoke.sh` runs the real image against a real MinIO in CI and checks that a setting written before a
-restart is still there after it.
+guard, and the shutdown flush.
+
+The workflow tests the promise twice, and neither is a mock standing in for the app:
+
+* `tests/s3-state-check.sh` runs the real binary against `tests/s3-mock.mjs`, a stand-in bucket that **verifies the
+  SigV4 signature** of every request (and checks its own verifier against AWS's published example before it serves
+  anything). It starts, changes a setting, stops with SIGTERM, deletes the data folder, starts again, and checks the
+  setting and the AES key came back.
+* `tests/docker-s3-smoke.sh` does the same to the **real image** against a **real MinIO**, checking first that the
+  container came up with no mounts at all - the image must not need a volume. A second, brand-new container, with an
+  empty `/data`, pulls it all back.

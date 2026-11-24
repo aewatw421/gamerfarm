@@ -16,7 +16,7 @@
 
 services:
   gamerfarm:
-    image: ghcr.io/OWNER/gamerfarm:latest     # or build: . to build it here
+    image: ghcr.io/aewatw421/gamerfarm:latest   # or build: . to build it here
     container_name: gamerfarm
     hostname: gamerfarm
     restart: unless-stopped
