@@ -82,7 +82,7 @@ function sign({ secret, region, amzDate, method, uri, query, headers, signedHead
 // ── the store on disk ──────────────────────────────────────────────────────
 
 const keyFile = (bucket, key) => path.join(dir, bucket, key);
-const safe = (key) => !key.split('/').some((p) => p === '..' || p === '');
+const safe = (key) => key.length > 0 && !key.split('/').some((p) => p === '..' || p === '');
 
 function listObjects(bucket, prefix, token, maxKeys) {
 	const root = path.join(dir, bucket);
@@ -196,6 +196,15 @@ const server = http.createServer((req, res) => {
 
 			console.log(`${req.method} /${bucket}?list-type=2 prefix=${prefix} → ${page.length} object(s)${more ? ' (more)' : ''}`);
 
+			return;
+		}
+
+		// CreateBucket: a PUT on the bucket itself, no key. Signed like any other request, so a signer is tested here too.
+		if (rest.length === 0 && req.method === 'PUT') {
+			fs.mkdirSync(path.join(dir, bucket), { recursive: true });
+			console.log(`PUT /${bucket} (create bucket)`);
+			res.writeHead(200);
+			res.end();
 			return;
 		}
 

@@ -29,11 +29,13 @@ const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
 const dateStamp = amzDate.slice(0, 8);
 const empty = sha256('');
 
+// Every header named in SignedHeaders has to be in the canonical headers block, in that order, and the block's own
+// trailing newline plus the separator's makes the blank line before SignedHeaders.
 const canonicalRequest = [
 	'PUT',
 	url.pathname,
 	'',
-	`host:${url.host}\n`,
+	`host:${url.host}\nx-amz-content-sha256:${empty}\nx-amz-date:${amzDate}\n`,
 	'host;x-amz-content-sha256;x-amz-date',
 	empty
 ].join('\n');
