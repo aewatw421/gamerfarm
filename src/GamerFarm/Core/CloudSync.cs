@@ -641,6 +641,9 @@ public static class CloudSync {
 
 		if (_canWrite) {
 			Log.Info(new Said("cloud: s3://{0} is the state; every change goes back there ({1} file(s) here)", _options.Where, _files));
+		} else {
+			Log.Warn(new Said("cloud: not writing to s3://{0} this run - it couldn't be read at start, and putting this "
+				+ "container's state over it could lose the real one", _options.Where));
 		}
 	}
 
@@ -652,6 +655,11 @@ public static class CloudSync {
 			}
 
 			return $"S3 is configured for {_options.Where}, but this run isn't syncing (the bucket couldn't be read at start).";
+		}
+
+		if (!_canWrite) {
+			return $"cloud: s3://{Where} couldn't be read at start, so nothing is being written to it this run.{Environment.NewLine}"
+				+ Status();
 		}
 
 		if (rest.Any(static w => w is "now" or "sync" or "flush")) {
