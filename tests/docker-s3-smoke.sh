@@ -21,6 +21,14 @@ KEY=${4:?access key id}
 SECRET=${5:?secret access key}
 PREFIX=${6:-gamerfarm}
 
+# The endpoint as the HOST sees it (127.0.0.1) is not the endpoint the container can reach: inside a container, 127.0.0.1
+# is the container itself. host.docker.internal is the way back to the host, and --add-host puts it in the container's
+# /etc/hosts on Linux as well as Docker Desktop. Anything else is used as it is (a real bucket, a compose service name).
+case "$ENDPOINT" in
+	*127.0.0.1*|*localhost*) INSIDE=$(echo "$ENDPOINT" | sed -e 's/127\.0\.0\.1/host.docker.internal/' -e 's/localhost/host.docker.internal/') ;;
+	*) INSIDE=$ENDPOINT ;;
+esac
+
 PASSWORD=a-long-smoke-test-password-123
 FIRST=gamerfarm-s3-smoke-1
 SECOND=gamerfarm-s3-smoke-2
@@ -45,11 +53,12 @@ start() {
 
 	docker rm -f "$name" >/dev/null 2>&1 || true
 	docker run -d --name "$name" --init \
+		--add-host host.docker.internal:host-gateway \
 		-e TZ=UTC \
 		-e GAMERFARM_WEB_HOST=0.0.0.0 \
 		-e GAMERFARM_WEB_PASSWORD="$PASSWORD" \
 		-e GAMERFARM_S3_BUCKET="$BUCKET" \
-		-e GAMERFARM_S3_ENDPOINT="$ENDPOINT" \
+		-e GAMERFARM_S3_ENDPOINT="$INSIDE" \
 		-e GAMERFARM_S3_ACCESS_KEY_ID="$KEY" \
 		-e GAMERFARM_S3_SECRET_ACCESS_KEY="$SECRET" \
 		-e GAMERFARM_S3_PREFIX="$PREFIX" \
@@ -64,6 +73,13 @@ start() {
 		if curl -fs "http://127.0.0.1:$PORT/api/ping" >/dev/null 2>&1; then
 			return 0
 		fi
+
+		# It is allowed to give up: with GAMERFARM_S3_REQUIRED (the default) an unreadable bucket ends the start rather
+		# than running on defaults. Say so at once instead of waiting out the full 90 seconds.
+		if [ "$(docker inspect -f '{{.State.Running}}' "$name")" != "true" ]; then
+			fail "$name exited instead of starting"
+		fi
+
 		sleep 1
 	done
 
