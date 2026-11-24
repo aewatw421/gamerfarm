@@ -110,6 +110,10 @@ echo "-- changing a setting that will be looked for in the next container"
 command "$TOKEN" 'set UpdateCheckHours 5'
 [ "$(command "$TOKEN" 'cloudsync now' | grep -c 'saved to s3://')" -ge 1 ] || fail "cloudsync now saved nothing"
 
+echo "-- the key that will have to come back with it:"
+docker exec "$FIRST" md5sum /data/config/state/secret.key | cut -d' ' -f1 > /tmp/key-before.txt
+cat /tmp/key-before.txt
+
 echo "== 2. docker stop is a save, not a rollback"
 docker stop -t 60 "$FIRST" >/dev/null
 docker logs "$FIRST" 2>&1 | grep -q 'shutting down' || fail "no clean shutdown in the log"
@@ -121,9 +125,18 @@ start "$SECOND"
 docker logs "$SECOND" 2>&1 | grep -Eq 'cloud: [0-9]+ file\(s\) restored' || fail "nothing was restored from the bucket"
 
 TOKEN=$(login)
-echo "-- config after the restore:"
-command "$TOKEN" config | grep -E 'UpdateCheckHours' || fail "the restored settings are missing UpdateCheckHours"
-[ "$(command "$TOKEN" config | grep -c 'UpdateCheckHours = 5')" -eq 1 ] || fail "the setting changed in the first container did not survive"
+echo "-- the restored settings, read straight off the new container's disk:"
+docker exec "$SECOND" cat /data/config/gamerFarm.json | tee /tmp/restored.json | grep -E '"UpdateCheckHours"|"WebPort"'
+[ "$(grep -c '"UpdateCheckHours": 5' /tmp/restored.json)" -eq 1 ] \
+	|| fail "the setting changed in the first container did not survive the re-create"
+
+# The accounts' saved logins are encrypted with config/state/secret.key: a restore that brought the configs but not that
+# key would look fine here and lose every Steam login. It has to be the same key.
+echo "-- the key the saved logins are encrypted with:"
+docker exec "$SECOND" md5sum /data/config/state/secret.key | tee /tmp/key-after.txt
+[ -s /tmp/key-before.txt ] || fail "the first container never wrote a key"
+[ "$(cut -d' ' -f1 /tmp/key-before.txt)" = "$(cut -d' ' -f1 /tmp/key-after.txt)" ] \
+	|| fail "the AES key came back different - every saved login would be lost"
 
 echo "-- cloudsync:"
 command "$TOKEN" cloudsync
