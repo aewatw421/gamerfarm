@@ -75,6 +75,11 @@ Docker you update by hand; see [Linux, Mac and Docker](https://gamer.mom/docs#li
 Linux zip for x64 and arm64 (Raspberry Pi), and a Dockerfile with an example compose file. You get the console and
 the web dashboard, no window. See [Linux, Mac and Docker](https://gamer.mom/docs#linux-mac-and-docker).
 
+**In a container with no disk of its own?** Set `GAMERFARM_S3_BUCKET` (and its credentials) and the settings, the
+accounts and their saved logins live in an S3 bucket - AWS, Cloudflare R2, Backblaze B2, or a MinIO of your own - so
+the container can be thrown away and re-created with everything still there. Nothing else to configure: see
+[docs/docker-s3.md](docs/docker-s3.md).
+
 ## What it does
 
 gamer.farm signs your Steam accounts in and farms their trading cards, one game after another, with a rough

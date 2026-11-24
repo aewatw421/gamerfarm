@@ -4,6 +4,11 @@
 #
 #   docker compose up -d --build  (after copying docker-compose.example.yml to docker-compose.yml)
 #
+# With no disk at all? Set GAMERFARM_S3_BUCKET, GAMERFARM_S3_ACCESS_KEY_ID and GAMERFARM_S3_SECRET_ACCESS_KEY (plus
+# GAMERFARM_S3_ENDPOINT for anything that isn't AWS) and /data becomes a cache: the settings, the accounts and their
+# saved logins are pulled from the bucket at start and every change is pushed back (Core/CloudSync.cs). The image
+# itself needs no volume then - re-create it anywhere and the farm is still set up. See docs/docker-s3.md.
+#
 # A bare `docker build` needs Docker's buildx plugin (this file uses BuildKit's --platform): Ubuntu's own docker.io
 # package doesn't bring it, and the old builder stops at "invalid OS component". Compose builds with BuildKit
 # either way - or `sudo apt install docker-buildx` first.
@@ -45,10 +50,14 @@ ENV GAMERFARM_WEB_HOST=0.0.0.0 \
     ASPNETCORE_HTTP_PORTS=
 
 EXPOSE 7242
-# backups/ too: the 'backup' command and every restore's "before" copy land there, and kept only inside the container
-# they were gone with the next rebuild or re-create. And plugins/ (1.9.0): an add-on installed from the dashboard goes
-# there, and has to outlive an image update the same way.
-VOLUME ["/data/config", "/data/logs", "/data/backups", "/data/plugins"]
+
+# Deliberately NO VOLUME here: the image is built to be disposable. Either set GAMERFARM_S3_BUCKET (the whole state in
+# a bucket, nothing on the host at all) or mount /data in compose/k8s - but the image does not demand it, so
+# `docker run` on a machine with no disk starts cleanly instead of inventing anonymous volumes to leak on the host.
+#   /data/config  - settings, accounts, saved logins, the AES key
+#   /data/logs    - the log files
+#   /data/backups - 'backup' zips and the copy a restore keeps
+#   /data/plugins - add-ons installed from the dashboard
 
 USER $APP_UID
 WORKDIR /data

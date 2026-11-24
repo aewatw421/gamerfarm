@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text;
@@ -114,6 +114,16 @@ bool wantWindow = OperatingSystem.IsWindows() && !forceNoGui;
 
 if (!wantWindow && OperatingSystem.IsWindows()) {
 	NativeConsole.Attach(interactive: true);
+}
+
+// A bucket for the data folder (GAMERFARM_S3_BUCKET): the settings, the accounts and their saved logins are pulled into
+// --path at start, before anything reads them, and every change goes back there (Core/CloudSync.cs). Nothing to do on a
+// PC: with no bucket set this is one environment look and a return.
+if (!ping && !steamSelfTest && !quitRunning && (setupChoices == null)) {
+	if (!await GamerFarm.Core.CloudSync.StartAsync(root).ConfigureAwait(false)) {
+		// Required, and not there: starting on defaults would put an empty config over the real one at the first save.
+		return 1;
+	}
 }
 
 try {
@@ -268,6 +278,9 @@ if (!SelfUpdate.OnTrial) {
 GlobalConfig global = ConfigStore.LoadGlobal();
 Live.Global = global;
 Log.Configure(global.FileLogging, global.Debug, root, global.LogRetentionDays);
+
+// The bucket the state lives in, in the log file too: what was pulled, and how many files are being watched.
+GamerFarm.Core.CloudSync.Announce();
 
 // 2.0.1: an install from before 2.0.1 takes the new names - its settings file, logs, add-on files, startup entry, shortcuts and
 // old program files. Now, unless this start is an update still on trial: then once it has said it's fine, so putting the old
@@ -674,6 +687,11 @@ if (web != null) {
 
 await manager.DisposeAsync().ConfigureAwait(false);
 BotManager.Flush();   // persist the last few minutes of lifetime totals a clean exit would otherwise drop
+
+// The last word to the bucket: everything a clean exit just wrote (those totals included) goes up before the process
+// is gone. On a container that is re-created with no disk, this is what makes the stop a save rather than a rollback.
+await GamerFarm.Core.CloudSync.StopAsync().ConfigureAwait(false);
+
 await Task.WhenAny(console, Task.Delay(1000)).ConfigureAwait(false);
 
 // An update handed to the systemd unit's helper says so here; otherwise 0.

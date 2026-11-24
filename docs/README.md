@@ -33,6 +33,8 @@ Nothing past Start here is required reading. Open whichever page you need.
 ## Going further
 
 - [Linux, Mac and Docker](linux-docker-vps.md), including a rented server (VPS) that runs it around the clock
+- [No disk: the state in an S3 bucket](docker-s3.md), for a container that is thrown away and re-created: the
+  settings, the accounts and their saved logins come back from AWS, R2, B2 or MinIO
 - [Plugins](plugins.md), for adding your own commands and features in C#. The full how-to is
   [PLUGINS.md](../PLUGINS.md)
 - [Safety and FAQ](safety-and-faq.md): what happens to your data, Steam's rules, common questions, and building

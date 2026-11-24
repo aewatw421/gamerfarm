@@ -16,3 +16,7 @@ __pycache__/
 /docker-compose.yml
 # Never a signing key in the repository (the add-on key lives in devKit\keys, outside every repo).
 *.key
+
+# a crashed test run leaves one of these, and it is never a source file
+core
+core.*

@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Text;
 using GamerFarm.Config;
 using GamerFarm.Core;
@@ -125,6 +125,7 @@ public static partial class Commands {
 		new("config", "[account] [all]", GroupSettings, "Show the settings and their current values. Add 'all' to include the advanced ones."),
 		new("set", "[account] <key> <value>", GroupSettings, "Change a setting. Without an account name it changes a global one."),
 		new("backup", "[now|status]", GroupSettings, "'backup' saves a quick zip into the backups folder next to gamer.farm - its saved logins only open on this PC. For the password-locked backup that opens on any PC: 'backup now' makes one right away, 'backup status' says when the last was made and the next is due. Restore either from the dashboard (Settings, Backup & restore) or the first-run setup."),
+		new("cloudsync", "[now]", GroupSettings, "Where the settings and the accounts are kept. With GAMERFARM_S3_BUCKET set they live in an S3 (or R2, B2, MinIO) bucket rather than on this container's disk: what was restored at start, what has gone back since, and any problem. 'cloudsync now' saves every change this second instead of waiting for the next sweep."),
 		new("import", "<asf|ime|idlemaster|hourboostr|singleboostr|sgi|steamidler|auto> [path] [force]", GroupSettings, "Bring accounts and settings across from another idler, ArchiSteamFarm login tokens and all."),
 
 		new("log", "[count|folder]", GroupOther, "The last few log lines. 'log folder' opens the folder the log files are in, on this PC.", "logs"),
@@ -1073,6 +1074,7 @@ public static partial class Commands {
 				"weekly" => WeeklyReport.Text(mgr),
 				"stuck" or "alarm" => StuckWatch.Text(mgr),
 				"backup" => await BackupCommand(rest).ConfigureAwait(false),
+				"cloudsync" => await CloudSync.CommandAsync(rest).ConfigureAwait(false),
 				"answer" => Prompt.Answer(Tail(line, 1)) ? "answered" : "nothing is waiting for an answer",
 				"theme" or "dark" or "light" => Theme(cmd, rest),
 				"screen" or "monitor" or "display" => await ScreenAsync(rest).ConfigureAwait(false),

@@ -1,0 +1,144 @@
+# The Docker image, built here and published to the GitHub Container Registry (ghcr.io/<owner>/gamerfarm).
+#
+# Two stages, and neither is optional:
+#
+#   build-and-test  builds the image for this CPU, then runs it the way a platform with no disk would: no volume, the
+#                   state in a real MinIO bucket. tests/docker-s3-smoke.sh starts the image, changes a setting, stops
+#                   the container, starts a BRAND-NEW one with an empty /data and checks the setting came back from
+#                   the bucket. That is the whole promise of docs/docker-s3.md, tested against a store that verifies
+#                   SigV4 itself (our own mock is not the judge here).
+#
+#   publish         multi-arch (amd64 + arm64) build and push, only after the test above passed. `main` gets :latest,
+#                   a tag v1.2.3 gets :1.2.3, every push gets :sha-<short> and the branch name.
+#
+# Tags on the published image (all lower case, as ghcr.io requires):
+#   ghcr.io/<owner>/gamerfarm:latest          the default branch
+#   ghcr.io/<owner>/gamerfarm:main            the branch
+#   ghcr.io/<owner>/gamerfarm:1.2.3           a v1.2.3 tag
+#   ghcr.io/<owner>/gamerfarm:sha-07e491e     the commit
+#
+# Run it from the Actions tab, or `gh workflow run docker-image.yml`. Pulling the image needs no login when the
+# package is public; a private package needs `docker login ghcr.io` with a token that has read:packages.
+name: docker-image
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: docker-image-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Everything the smoke test needs to know about the bucket. The keys are throwaway ones for the MinIO started below
+  # - the same values in the container environment and in the mc that makes the bucket.
+  S3_BUCKET: gamerfarm-state
+  S3_ACCESS_KEY_ID: gamerfarm
+  S3_SECRET_ACCESS_KEY: gamerfarm-smoke-secret
+  S3_PREFIX: gamerfarm
+
+jobs:
+  build-and-test:
+    name: build and the S3 state test
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    services:
+      minio:
+        # A real S3 implementation, not a stand-in: it checks every signature the app sends.
+        image: quay.io/minio/minio:latest
+        env:
+          MINIO_ROOT_USER: gamerfarm
+          MINIO_ROOT_PASSWORD: gamerfarm-smoke-secret
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "curl -fsS http://localhost:9000/minio/health/live"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: build the image
+        run: docker build -t gamerfarm:ci .
+
+      - name: make the bucket
+        run: |
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:9000/minio/health/live > /dev/null && break; sleep 2; done
+          docker run --rm --network host --entrypoint sh quay.io/minio/mc:latest -c \
+            "mc alias set ci http://127.0.0.1:9000 '$S3_ACCESS_KEY_ID' '$S3_SECRET_ACCESS_KEY' && mc mb -p 'ci/$S3_BUCKET'"
+
+      - name: the state lives in the bucket, not in the container
+        run: |
+          chmod +x tests/docker-s3-smoke.sh
+          sh tests/docker-s3-smoke.sh gamerfarm:ci \
+            http://127.0.0.1:9000 "$S3_BUCKET" "$S3_ACCESS_KEY_ID" "$S3_SECRET_ACCESS_KEY" "$S3_PREFIX"
+
+      - name: what the container said
+        if: always()
+        run: docker logs gamerfarm-s3-smoke-2 2>&1 | tail -n 60 || true
+
+      - name: the bucket's objects
+        if: always()
+        run: |
+          docker run --rm --network host --entrypoint sh quay.io/minio/mc:latest -c \
+            "mc alias set ci http://127.0.0.1:9000 '$S3_ACCESS_KEY_ID' '$S3_SECRET_ACCESS_KEY' > /dev/null && mc ls -r 'ci/$S3_BUCKET'" || true
+
+  publish:
+    name: publish to ghcr.io (amd64 + arm64)
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: image name, lower case
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,format=short
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: the image
+        run: |
+          echo "published:" 
+          echo "${{ steps.meta.outputs.tags }}" | while read -r tag; do echo "  $tag"; done

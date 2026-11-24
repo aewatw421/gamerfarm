@@ -1,0 +1,71 @@
+# gamer.farm with the state in an S3 bucket, and no disk of its own.
+#
+#   1. Copy this file to docker-compose.yml (or use it as it is with `-f`).
+#   2. Fill in the bucket block below - a bucket, an access key and a secret key. That's the whole setup.
+#   3. docker compose up -d
+#   4. Open http://localhost:7242, sign in with the password, add the accounts there.
+#
+# Nothing is mounted. The container's /data is scratch: at start gamer.farm pulls config/ (settings, accounts, their
+# saved Steam logins, the key that opens them) and plugins/ from the bucket, and every change goes back to it within
+# a couple of seconds - including on `docker stop`, which is a clean shutdown. Delete the container, pull the image
+# again on another machine, start it with the same five variables: the farm is still set up.
+#
+# One container per prefix. Two copies sharing a GAMERFARM_S3_PREFIX would write over each other's settings.
+#
+# A bucket on AWS / Cloudflare R2 / Backblaze B2 / MinIO - see docs/docker-s3.md for the endpoint each one uses.
+
+services:
+  gamerfarm:
+    image: ghcr.io/OWNER/gamerfarm:latest     # or build: . to build it here
+    container_name: gamerfarm
+    hostname: gamerfarm
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 1m                     # SIGTERM signs every account out, then the last save goes to the bucket
+    environment:
+      TZ: ${TZ:-Etc/UTC}
+
+      # The dashboard. Required: with no password it only lets in requests from inside the container itself,
+      # which through a published port is nobody.
+      GAMERFARM_WEB_PASSWORD: ${GAMERFARM_WEB_PASSWORD:?put GAMERFARM_WEB_PASSWORD=yourpassword in a .env file next to docker-compose.yml}
+
+      # ---- the state, in a bucket ---------------------------------------------------------------
+      GAMERFARM_S3_BUCKET: ${GAMERFARM_S3_BUCKET:?the bucket the settings live in}
+      GAMERFARM_S3_ACCESS_KEY_ID: ${GAMERFARM_S3_ACCESS_KEY_ID:?}
+      GAMERFARM_S3_SECRET_ACCESS_KEY: ${GAMERFARM_S3_SECRET_ACCESS_KEY:?}
+      # Everything sits under this prefix, so one bucket can hold several farms (and anything else).
+      GAMERFARM_S3_PREFIX: gamerfarm
+
+      # AWS: nothing more. Leave these two out and us-east-1 with https://s3.amazonaws.com is used.
+      # GAMERFARM_S3_REGION: eu-central-1
+
+      # Anything that isn't AWS needs its endpoint. Path style (/bucket/key) is turned on automatically for these.
+      # Cloudflare R2:    https://<account-id>.r2.cloudflarestorage.com   (region: auto)
+      # Backblaze B2:     https://s3.<region>.backblazeb2.com
+      # MinIO / Ceph:     http://minio:9000
+      # GAMERFARM_S3_ENDPOINT: https://<account-id>.r2.cloudflarestorage.com
+      # GAMERFARM_S3_REGION: auto
+      # GAMERFARM_S3_PATH_STYLE: "1"
+
+      # What goes to the bucket. config/ and plugins/ by default - add ",backups" to keep the backup zips there too,
+      # or ",logs" for the log files (they are written constantly, so expect a steady trickle of small uploads).
+      # GAMERFARM_S3_FOLDERS: config,plugins
+
+      # Fail the start when the bucket can't be read (the default), instead of running on defaults that would be
+      # written over the real settings. Set to 0 to start anyway; that run then keeps its state in the container.
+      # GAMERFARM_S3_REQUIRED: "1"
+
+      # For your phone: this computer's address on your wifi, or the name people reach it by.
+      # GAMERFARM_HOME_ADDRESS: 192.168.1.20
+      # GAMERFARM_PUBLIC_ADDRESS: farm.example.com
+      # GAMERFARM_TRUSTED_PROXIES: 172.16.0.0/12
+
+    ports:
+      - "127.0.0.1:7242:7242"
+
+    # No volumes on purpose: that is the point of the bucket. Add a /data mount only for the parts you'd rather keep
+    # on the host - the bucket always wins at start, so a mount never loses anything.
+    # volumes:
+    #   - ./logs:/data/logs
+
+    stdin_open: true

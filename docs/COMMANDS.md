@@ -22,11 +22,11 @@ In the app, `help` lists them all and `help <command>` explains one. It explains
 | **[Achievements](#achievements)** | `achievements` `hunt` `dlc` |
 | **[Free stuff & keys](#free-stuff--keys)** | `freegames` `freeitems` `queue` `events` `redeem` `keys` |
 | **[Profile & info](#profile--info)** | `value` `level` `balance` `points` `bans` `scamwatch` `health` `owns` `privacy` `joingroup` |
-| **[Settings](#settings)** | `config` `set` `backup` `import` |
+| **[Settings](#settings)** | `config` `set` `backup` `cloudsync` `import` |
 | **[The app](#the-app)** | `log` `stats` `report` `notify` `plugins` `addons` `tutorial` `help` `theme` `mini` `dashboard` `anywhere` `clear` `visitors` `version` `update` `answer` `exit` |
 | **[Advanced](#advanced)** | `fairswap` `addlicense` `reload` `screen` |
 
-88 commands in all.
+89 commands in all.
 
 ## Accounts
 
@@ -137,6 +137,7 @@ In the app, `help` lists them all and `help <command>` explains one. It explains
 | `config [account] [all]` | Show the settings and their current values. Add 'all' to include the advanced ones. |
 | `set [account] <key> <value>` | Change a setting. Without an account name it changes a global one. |
 | `backup [now\|status]` | 'backup' saves a quick zip into the backups folder next to gamer.farm - its saved logins only open on this PC. For the password-locked backup that opens on any PC: 'backup now' makes one right away, 'backup status' says when the last was made and the next is due. Restore either from the dashboard (Settings, Backup & restore) or the first-run setup. |
+| `cloudsync [now]` | Where the settings and the accounts are kept. With GAMERFARM_S3_BUCKET set they live in an S3 (or R2, B2, MinIO) bucket rather than on this container's disk: what was restored at start, what has gone back since, and any problem. 'cloudsync now' saves every change this second instead of waiting for the next sweep. |
 | `import <asf\|ime\|idlemaster\|hourboostr\|singleboostr\|sgi\|steamidler\|auto> [path] [force]` | Bring accounts and settings across from another idler, ArchiSteamFarm login tokens and all. |
 
 ## The app
