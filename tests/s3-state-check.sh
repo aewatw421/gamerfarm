@@ -33,7 +33,15 @@ BUCKET_NAME=check
 cleanup() {
 	[ -n "${APP_PID:-}" ] && kill -TERM "$APP_PID" 2>/dev/null || true
 	[ -n "${MOCK_PID:-}" ] && kill "$MOCK_PID" 2>/dev/null || true
-	rm -rf "$WORK"
+
+	# Give them a moment to actually be gone: a process still writing into the folder makes rm say "Directory not
+	# empty", and under `set -e` that would fail a run that had already passed.
+	for _ in $(seq 1 20); do
+		[ -z "$(ps -o pid= -p "${APP_PID:-0}" "${MOCK_PID:-0}" 2>/dev/null | tr -d ' ')" ] && break
+		sleep 0.25
+	done
+
+	rm -rf "$WORK" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 
@@ -137,5 +145,6 @@ KEY_AFTER=$(md5sum "$DATA/config/state/secret.key" | cut -d' ' -f1)
 
 echo "-- cloudsync:"
 command "$TOKEN" cloudsync | sed -E 's/.*"output":"(.*)","holdsSecret".*/\1/' | sed 's/\\n/\n/g'
+echo
 
 echo "PASS: the state lived in the bucket, not in the data folder"
