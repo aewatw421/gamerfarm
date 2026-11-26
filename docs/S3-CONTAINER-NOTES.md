@@ -448,6 +448,90 @@ ls tests/s3-mock.mjs tests/s3-state-check.sh tests/docker-s3-smoke.sh
 不影响我们——`secret.key` 只是一个文件，照原样搬运；但要在真实验证里
 确认「恢复后 token 仍能解密」，用 5.4 第 4 步的 md5 对比 + 登录日志双重确认。
 
+### 9.1 ⚠ 最隐蔽的一类冲突：上游的**测试**会断言 Dockerfile 里有 `VOLUME`
+
+**这件事 2.0.5 同步时真实发生过，必须专门查。**
+
+代码零冲突不代表没冲突。上游 `tests/GamerFarm.Tests/Program.cs` 里有一组对
+**Dockerfile 和 docker-compose.example.yml 的静态断言**（搜 `"docker: ` 就能找到，
+2.0.5 时大约在第 7823 行「`// Docker: backups kept outside the container...`」那段）。
+其中原来有一条是：
+
+```csharp
+Check("docker: ... /data/backups and /data/plugins are volumes of the image",
+    compose.Contains("- ./backups:/data/backups", StringComparison.Ordinal)
+    && dockerfile.Contains("\"/data/backups\", \"/data/plugins\"]", StringComparison.Ordinal)   // ← 断言必须有 VOLUME
+    && compose.Contains("\n      - ./plugins:/data/plugins", StringComparison.Ordinal)
+    && dockerfile.Contains("mkdir -p /data/config /data/logs /data/backups", StringComparison.Ordinal));
+```
+
+我们**故意删掉了 `VOLUME`**，于是这条测试在上游合并后立刻 FAIL：
+
+```
+FAIL  docker: ./backups and ./plugins are mounted, and /data/backups and /data/plugins are volumes of the image
+```
+
+**为什么不能顺着它改回去**：`VOLUME` 会让 Docker 为每个容器凭空创建匿名卷，
+在「无盘容器 + 状态在桶里」的部署上，这是最坏的默认——用户以为没挂盘，
+实际上每次重构都造一个新卷、旧卷泄漏在宿主机，而且 `docker-s3-smoke.sh` 里
+`.Mounts == 0` 的断言会直接失败。
+
+**正确做法**：把断言**反过来**，同时保留它原本要保护的东西
+（compose 里照样挂载、后端目录照样创建），并把理由写在测试旁边：
+
+```csharp
+Check("docker: ./backups and ./plugins are mounted, and the image needs no VOLUME of its own",
+    compose.Contains("- ./backups:/data/backups", StringComparison.Ordinal)
+    && compose.Contains("\n      - ./plugins:/data/plugins", StringComparison.Ordinal)
+    && dockerfile.Contains("mkdir -p /data/config /data/logs /data/backups", StringComparison.Ordinal)
+    && !dockerfile.Contains("\nVOLUME", StringComparison.Ordinal));   // ← 主张反过来了
+```
+
+`"\nVOLUME"` 带前导换行是有意的：它只匹配行首的指令，不会误伤
+Dockerfile 里那句解释性的注释「Deliberately NO VOLUME here...」。
+
+**所以同步流程里要加一步**（放在第 9 节第 4 步之后、第 5 步之前）：
+
+```bash
+# 上游是否改了对 Dockerfile 的静态断言？
+git diff 07e491e upstream/main -- tests/GamerFarm.Tests/Program.cs | grep -nE "VOLUME|volumes of the image|dockerfile\." 
+grep -n "needs no VOLUME of its own" tests/GamerFarm.Tests/Program.cs    # 我们的版本还在吗
+grep -nE '^\s*VOLUME' Dockerfile                                          # 必须无输出
+```
+
+**同类风险**：上游还可能加别的 Dockerfile 断言（比如断言 `EXPOSE 7242`、
+断言某个 `ENV`、断言 `HEALTHCHECK` 的具体写法）。我们的 Dockerfile 改动很克制
+（只删了 `VOLUME`，其余原样保留），所以只有「断言 VOLUME 存在」这一条会撞上；
+但每次同步都该 `git diff` 一下那个测试块，看有没有新增对 Dockerfile 的断言。
+
+运行单测时，判断这条是否回归的方法很简单：
+`PASS  docker:` 那 5 条（backups/plugins、time zone、public address、health check、update message）
+**必须全 PASS**。这 5 条不依赖网络，是本机能稳定跑出来的；其余 FAIL 见 5.1。
+
+---
+
+## 9.2 同步实录：2.0.3 → 2.0.5（2026-11-26）
+
+记下来当参照，下次能快速判断「这次算顺利还是算麻烦」。
+
+| 项目 | 结果 |
+|---|---|
+| 上游新增 commit | 2 个（`5abb423` 2.0.4、`bf030bc` 2.0.5） |
+| 变更规模 | 18 个文件，+498/−88 |
+| 改了什么 | `Modules/SaleEvents.cs`（Steam 2026 颁奖提名，+321）、10 个语言包、`addons/addons.json(.sig)`、`Config/Settings.cs` 一行、`GamerFarm.csproj` 版本号、`tests/Program.cs` +137、2 个 HTML 样本 |
+| 我们那 8 个文件被碰了吗 | **一个都没碰**（`Program.cs`/`Commands.cs`/`Dockerfile`/`COMMANDS.md`/`README.md`/`docs/README.md`/`.gitignore`） |
+| 合并冲突 | **0** |
+| 6 个锚点 | 全部完好，无需重贴 |
+| `COMMANDS.md` | 重新生成后 **unchanged**（还是 89 条） |
+| 唯一需要动的地方 | 第 9.1 节那条 `VOLUME` 测试断言 |
+| 编译 | 0 warning / 0 error |
+| `tests/s3-state-check.sh` | PASS |
+| CI | run `45750129089` 全绿 |
+| 镜像 | `latest` = `sha-8c2cbef`，`.Volumes == null`，DLL 内有 2.0.5 + 全部 S3 符号 |
+
+**这次的经验**：上游碰 `Program.cs` / `Commands.cs` / `Dockerfile` 的时候才需要小心地按锚点重贴；
+碰 **测试里的 Dockerfile 断言** 反而更容易漏，因为它不产生 merge 冲突，只在跑单测时冒出来。
+
 ---
 
 ## 10. 这次交付的验收记录（可以作为「好的样子」参照）
