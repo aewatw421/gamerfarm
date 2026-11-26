@@ -3471,7 +3471,14 @@
     "gamer.farm dashboard sign-in code: {0}\n\nSomebody at {1} ({2}) opened a dashboard sign-in link from outside your home. The code works for {3} minutes.\n\nNot you? Don't give the code to anyone. Send /visitors signout here, then change the dashboard password.": "Código de login do painel do gamer.farm: {0}\n\nAlguém em {1} ({2}) abriu um link de login do painel de fora da sua casa. O código vale por {3} minutos.\n\nNão foi você? Não passe o código para ninguém. Mande /visitors signout aqui e depois troque a senha do painel.",
     "A sign-in link for the dashboard - it works once, for {0} seconds:": "Um link de login para o painel - funciona uma vez, por {0} segundos:",
     "There's no dashboard password, so it opens on this PC without one anyway.": "O painel não tem senha, então neste PC ele abre sem senha de qualquer jeito.",
-    "That sign-in link has run out. Sign in with the password, or get a new link.": "Esse link de login expirou. Entre com a senha ou peça um link novo."
+    "That sign-in link has run out. Sign in with the password, or get a new link.": "Esse link de login expirou. Entre com a senha ou peça um link novo.",
+    "skipped the Steam Awards category {0} - nothing this account played fits it": "pulou a categoria {0} do Steam Awards - nada que esta conta jogou se encaixa nela",
+    "Steam didn't take skipping the Steam Awards category {0} - it tries again at the next look": "o Steam não aceitou pular a categoria {0} do Steam Awards - tenta de novo na próxima olhada",
+    "Steam didn't take the nomination of {0} in the Steam Awards category {1} - it tries again at the next look": "o Steam não aceitou a indicação de {0} na categoria {1} do Steam Awards - tenta de novo na próxima olhada",
+    "Steam didn't take the vote for {0} in the Steam Awards - it tries again at the next look": "o Steam não aceitou o voto em {0} no Steam Awards - tenta de novo na próxima olhada",
+    "{0} - next one waits: {1}": "{0} - a próxima espera: {1}",
+    "{0} of them skipped - nothing this account played fits them": "{0} delas puladas - nada que esta conta jogou se encaixa nelas",
+    "next award step waits: {0}": "próximo passo dos prêmios espera: {0}"
   },
   "settings": {
     "BackupToTelegram": {
@@ -4112,7 +4119,7 @@
     },
     "SaleAwardsNominate": {
       "label": "Indicar no Steam Awards",
-      "tip": "No fim de novembro, indica um jogo em cada categoria do Steam Awards, para a insígnia de indicação. Por exemplo, um jogo que esta conta jogou por 300 horas vai na categoria em que a Steam diz que ele se encaixa. Só jogos que esta conta jogou, escolhidos como definido em \"Qual jogo indicar\"; uma categoria sem nenhum deles fica vazia. Desligado: nenhuma indicação."
+      "tip": "No fim de novembro, indica um jogo em cada categoria do Steam Awards, para a insígnia de indicação. Por exemplo, um jogo que esta conta jogou por 300 horas vai na categoria em que a Steam diz que ele se encaixa. Só jogos que esta conta jogou, escolhidos como definido em \"Qual jogo indicar\"; uma categoria sem nenhum deles é pulada, como faz o próprio botão Pular da página. Desligado: nenhuma indicação."
     },
     "SaleAwardsVote": {
       "label": "Votar no Steam Awards",

@@ -1,5 +1,5 @@
 {
-  "serial": 11,
+  "serial": 13,
   "addons": [
     {
       "id": "rep4rep",
@@ -27,8 +27,8 @@
         "version": "1.0.3",
         "minAppVersion": "2.0.1",
         "file": "gamerfarm.rep4rep.dll",
-        "url": "https://github.com/VisaHolder/gamerfarm/releases/download/v2.0.3/gamerfarm.rep4rep.dll",
-        "sha256": "64a3590fef3827f029f6a51f0ae7cc9073e6a38a8f06351d0ec84567d684998c"
+        "url": "https://github.com/VisaHolder/gamerfarm/releases/download/v2.0.5/gamerfarm.rep4rep.dll",
+        "sha256": "1e43403e73875608cee88f257cf4698b0b903155974a1835fdd10ed83cd0f53d"
       },
       "source": "https://github.com/VisaHolder/gamerfarm/tree/main/addons/rep4rep"
     }

@@ -15,18 +15,21 @@ namespace GamerFarm.Modules;
 /// <list type="bullet">
 /// <item>nominating: GET ISteamAwardsService/Nominate with input_json {category_id, nominated_id, source} - source 6 is
 /// "from the games you played", what the page itself sends for a pick from that list. GetUserNominations says what's
-/// already nominated, GetNominationRecommendations {category_id} the games this account played that fit a category.</item>
+/// already nominated, GetNominationRecommendations {category_id} the games this account played that fit a category.
+/// A category none of them fits is skipped the way the page's Skip button does it: nominated_id 2215130, source 0.
+/// Steam takes one game in many categories; the page only lists those already used last.</item>
 /// <item>voting: POST IStoreSalesService/SetVote with voteid, appid and sale_appid.</item>
-/// <item>both pages carry their state in <c>#application_config</c>'s <c>data-steam_awards_config</c>: the categories
-/// (<c>definitions.votes[]</c> with voteid, start_time, end_time and the finalists in app_discounts), this account's
-/// votes (<c>user_votes[]</c>), the sale's app id and the nomination badge's tasks (<c>badge_progress.quests[]</c>).</item>
+/// <item>the page's state lists the categories (voteid, start_time, end_time and the finalists in app_discounts),
+/// this account's votes, the sale's app id and the nomination badge's tasks. Up to 2025 that was
+/// <c>#application_config</c>'s <c>data-steam_awards_config</c>; from 2026 it is the React Query cache in
+/// <c>#valve-ssr-data</c>. Both shapes are read.</item>
 /// </list>
 /// Voting is open while start_time &lt;= now &lt; end_time, the same test Steam's own page makes. Nominations come in the
 /// weeks before: open while that year's categories are listed and their voting hasn't started yet.
 /// </remarks>
 public static class SaleEventPages {
-	/// <summary>One award category: its id, when its voting opens and closes, and the finalists.</summary>
-	public sealed record Category(int Id, DateTime? Start, DateTime? End, IReadOnlyList<uint> Finalists);
+	/// <summary>One award category: its id, when its voting opens and closes, the finalists, and its name as Steam shows it.</summary>
+	public sealed record Category(int Id, DateTime? Start, DateTime? End, IReadOnlyList<uint> Finalists, string Name = "");
 
 	/// <summary>What a Steam Awards page says.</summary>
 	public sealed record Awards(IReadOnlyList<Category> Categories, IReadOnlyDictionary<int, uint> Votes, uint SaleAppId, IReadOnlyList<bool> Quests);
@@ -52,10 +55,11 @@ public static class SaleEventPages {
 	public static Awards? ParseAwards(string? html) {
 		string? json = DataAttribute(html, "data-steam_awards_config");
 
-		if (string.IsNullOrWhiteSpace(json)) {
-			return null;
-		}
+		return !string.IsNullOrWhiteSpace(json) ? ParseAwardsConfig(json!) : ParseAwardsReact(html);
+	}
 
+	/// <summary>The page state up to 2025, carried in <c>data-steam_awards_config</c>.</summary>
+	private static Awards? ParseAwardsConfig(string json) {
 		try {
 			using JsonDocument doc = JsonDocument.Parse(json);
 			JsonElement root = doc.RootElement;
@@ -64,51 +68,178 @@ public static class SaleEventPages {
 				return null;
 			}
 
-			List<Category> categories = [];
-
-			if (root.TryGetProperty("definitions", out JsonElement defs) && (defs.ValueKind == JsonValueKind.Object)
-				&& defs.TryGetProperty("votes", out JsonElement votes) && (votes.ValueKind == JsonValueKind.Array)) {
-				foreach (JsonElement v in votes.EnumerateArray()) {
-					if (I32(v, "voteid") is not { } id || (id <= 0)) {
-						continue;
-					}
-
-					List<uint> finalists = [];
-
-					if (v.TryGetProperty("app_discounts", out JsonElement apps) && (apps.ValueKind == JsonValueKind.Array)) {
-						foreach (JsonElement a in apps.EnumerateArray()) {
-							if ((Int(a, "appid") is { } app) && (app > 0)) {
-								finalists.Add((uint) app);
-							}
-						}
-					}
-
-					categories.Add(new Category(id, Time(v, "start_time"), Time(v, "end_time"), finalists));
-				}
-			}
-
-			Dictionary<int, uint> mine = [];
-
-			if (root.TryGetProperty("user_votes", out JsonElement uv) && (uv.ValueKind == JsonValueKind.Array)) {
-				foreach (JsonElement v in uv.EnumerateArray()) {
-					if ((I32(v, "voteid") is { } id) && (Int(v, "appid") is { } app) && (app > 0)) {
-						mine[id] = (uint) app;
-					}
-				}
-			}
-
+			List<Category> categories = ReadCategories(root, "definitions", "votes");
+			Dictionary<int, uint> mine = ReadVotes(root, "user_votes");
 			long sale = Int(root, "sale_appid") ?? Int(root, "appid") ?? 0;
-			List<bool> quests = [];
-
-			if (root.TryGetProperty("badge_progress", out JsonElement badge) && (badge.ValueKind == JsonValueKind.Object)
-				&& badge.TryGetProperty("quests", out JsonElement qs) && (qs.ValueKind == JsonValueKind.Array)) {
-				quests.AddRange(qs.EnumerateArray().Select(static q => q.TryGetProperty("completed", out JsonElement c) && (c.ValueKind == JsonValueKind.True)));
-			}
+			List<bool> quests = ReadQuests(root, "badge_progress");
 
 			return new Awards(categories, mine, sale is > 0 and <= uint.MaxValue ? (uint) sale : 0, quests);
 		} catch (JsonException) {
 			return null;
 		}
+	}
+
+	/// <summary>
+	/// The 2026 page dropped <c>data-steam_awards_config</c>: its state now sits in the React Query cache inside the
+	/// <c>#valve-ssr-data</c> script. Read the same categories, votes, sale app id and badge tasks from there.
+	/// </summary>
+	private static Awards? ParseAwardsReact(string? html) {
+		if (string.IsNullOrEmpty(html)) {
+			return null;
+		}
+
+		Match script = Regex.Match(html, "<script\\b[^>]*\\bid=\"valve-ssr-data\"[^>]*>(.*?)</script>",
+			RegexOptions.Singleline | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+		if (!script.Success) {
+			return null;
+		}
+
+		try {
+			using JsonDocument outer = JsonDocument.Parse(script.Groups[1].Value);
+
+			if ((outer.RootElement.ValueKind != JsonValueKind.Object)
+				|| !outer.RootElement.TryGetProperty("renderContext", out JsonElement context) || (context.ValueKind != JsonValueKind.Object)
+				|| !context.TryGetProperty("queryData", out JsonElement cache)) {
+				return null;
+			}
+
+			// The cache is itself JSON, written as a string in the server-rendered page.
+			using JsonDocument? inner = cache.ValueKind == JsonValueKind.String ? JsonDocument.Parse(cache.GetString() ?? "") : null;
+			JsonElement root = inner?.RootElement ?? cache;
+
+			if ((root.ValueKind != JsonValueKind.Object) || !root.TryGetProperty("queries", out JsonElement queries) || (queries.ValueKind != JsonValueKind.Array)) {
+				return null;
+			}
+
+			JsonElement voteDefinitions = default, userNominations = default, badgeProgress = default;
+			uint sale = 0;
+
+			foreach (JsonElement query in queries.EnumerateArray()) {
+				if ((query.ValueKind != JsonValueKind.Object) || !query.TryGetProperty("queryKey", out JsonElement key)
+					|| (key.ValueKind != JsonValueKind.Array) || (key.GetArrayLength() == 0) || (key[0].ValueKind != JsonValueKind.String)) {
+					continue;
+				}
+
+				string name = key[0].GetString() ?? "";
+				JsonElement data = query.TryGetProperty("state", out JsonElement state) && (state.ValueKind == JsonValueKind.Object)
+					&& state.TryGetProperty("data", out JsonElement stateData) ? stateData : default;
+
+				if (name.Contains("GetVoteDefinitions", StringComparison.OrdinalIgnoreCase)) {
+					// Steam passes the sale's app id as the query's second key: the same id the old config called sale_appid.
+					if ((key.GetArrayLength() > 1) && (key[1].ValueKind == JsonValueKind.Number) && key[1].TryGetInt64(out long id)
+						&& (id > 0) && (id <= uint.MaxValue)) {
+						sale = (uint) id;
+					}
+
+					voteDefinitions = data;
+				} else if (name.Contains("GetUserNominations", StringComparison.OrdinalIgnoreCase)) {
+					userNominations = data;
+				} else if (name.Contains("GetCommunityBadgeProgress", StringComparison.OrdinalIgnoreCase)) {
+					badgeProgress = data;
+				}
+			}
+
+			// The old config nested votes under definitions; the React query puts them straight under data.
+			List<Category> categories = voteDefinitions.ValueKind == JsonValueKind.Object
+				? ReadCategories(voteDefinitions, "", "votes") : [];
+
+			Dictionary<int, uint> mine = [];
+			JsonElement noms = userNominations.ValueKind == JsonValueKind.Object && userNominations.TryGetProperty("nominations", out JsonElement nested)
+				? nested : userNominations;
+
+			if (noms.ValueKind == JsonValueKind.Array) {
+				foreach (JsonElement n in noms.EnumerateArray()) {
+					int? category = I32(n, "category_id") ?? I32(n, "voteid");
+
+					if ((category is { } c) && (Int(n, "appid") is { } app) && (app > 0) && (app != SkipApp)) {
+						mine[c] = (uint) app;
+					}
+				}
+			}
+
+			List<bool> quests = [];
+			JsonElement tasks = badgeProgress.ValueKind == JsonValueKind.Object && badgeProgress.TryGetProperty("quests", out JsonElement nestedTasks)
+				? nestedTasks : badgeProgress;
+
+			if (tasks.ValueKind == JsonValueKind.Array) {
+				quests.AddRange(tasks.EnumerateArray().Select(static q =>
+					(q.ValueKind == JsonValueKind.Object) && q.TryGetProperty("completed", out JsonElement c) && (c.ValueKind == JsonValueKind.True)));
+			}
+
+			return new Awards(categories, mine, sale, quests);
+		} catch (JsonException) {
+			return null;
+		}
+	}
+
+	/// <summary>Categories from <c>parent.[group.]votes[]</c>, where an empty group means the array is on the parent itself.</summary>
+	private static List<Category> ReadCategories(JsonElement parent, string group, string arrayName) {
+		List<Category> categories = [];
+		JsonElement source = parent;
+
+		if (!string.IsNullOrEmpty(group)) {
+			if (!parent.TryGetProperty(group, out JsonElement nested) || (nested.ValueKind != JsonValueKind.Object)) {
+				return categories;
+			}
+
+			source = nested;
+		}
+
+		if (!source.TryGetProperty(arrayName, out JsonElement votes) || (votes.ValueKind != JsonValueKind.Array)) {
+			return categories;
+		}
+
+		foreach (JsonElement v in votes.EnumerateArray()) {
+			if (I32(v, "voteid") is not { } id || (id <= 0)) {
+				continue;
+			}
+
+			List<uint> finalists = [];
+
+			if (v.TryGetProperty("app_discounts", out JsonElement apps) && (apps.ValueKind == JsonValueKind.Array)) {
+				foreach (JsonElement a in apps.EnumerateArray()) {
+					if ((Int(a, "appid") is { } app) && (app > 0)) {
+						finalists.Add((uint) app);
+					}
+				}
+			}
+
+			string name = v.TryGetProperty("localization", out JsonElement loc) && (loc.ValueKind == JsonValueKind.Object)
+				&& loc.TryGetProperty("title", out JsonElement title) && (title.ValueKind == JsonValueKind.String) ? title.GetString() ?? "" : "";
+
+			categories.Add(new Category(id, Time(v, "start_time"), Time(v, "end_time"), finalists, name));
+		}
+
+		return categories;
+	}
+
+	/// <summary>voteid → game from an array of the page's own votes.</summary>
+	private static Dictionary<int, uint> ReadVotes(JsonElement parent, string arrayName) {
+		Dictionary<int, uint> mine = [];
+
+		if (parent.TryGetProperty(arrayName, out JsonElement votes) && (votes.ValueKind == JsonValueKind.Array)) {
+			foreach (JsonElement v in votes.EnumerateArray()) {
+				if ((I32(v, "voteid") is { } id) && (Int(v, "appid") is { } app) && (app > 0)) {
+					mine[id] = (uint) app;
+				}
+			}
+		}
+
+		return mine;
+	}
+
+	/// <summary>The badge's quests, in order, as completed flags.</summary>
+	private static List<bool> ReadQuests(JsonElement parent, string group) {
+		List<bool> quests = [];
+
+		if (parent.TryGetProperty(group, out JsonElement badge) && (badge.ValueKind == JsonValueKind.Object)
+			&& badge.TryGetProperty("quests", out JsonElement tasks) && (tasks.ValueKind == JsonValueKind.Array)) {
+			quests.AddRange(tasks.EnumerateArray().Select(static q =>
+				(q.ValueKind == JsonValueKind.Object) && q.TryGetProperty("completed", out JsonElement c) && (c.ValueKind == JsonValueKind.True)));
+		}
+
+		return quests;
 	}
 
 	/// <summary>Voting is on: the first category's voting has started and not ended - Steam's own test.</summary>
@@ -120,7 +251,10 @@ public static class SaleEventPages {
 		page is { Categories.Count: > 0 } && (page.Categories.Min(static c => c.Start ?? DateTime.MinValue) is var start)
 		&& (start > nowUtc) && (start - nowUtc <= NominationLead);
 
-	/// <summary>category → nominated game, from GetUserNominations or Nominate's answer. Null when it isn't one.</summary>
+	/// <summary>
+	/// category → nominated game, from GetUserNominations or Nominate's answer. Null when it isn't one. A category skipped
+	/// on Steam's page is in it too, as <see cref="SkipApp"/>: answered, like the page counts it, but no game.
+	/// </summary>
 	public static Dictionary<int, uint>? ParseNominations(string? json) {
 		if (Response(json) is not { } body) {
 			return null;
@@ -131,7 +265,7 @@ public static class SaleEventPages {
 
 		if (body.RootElement.GetProperty("response").TryGetProperty("nominations", out JsonElement list) && (list.ValueKind == JsonValueKind.Array)) {
 			foreach (JsonElement n in list.EnumerateArray()) {
-				if ((I32(n, "category_id") is { } cat) && (Int(n, "appid") is { } app) && (app > 0) && (app != SkipApp)) {
+				if ((I32(n, "category_id") is { } cat) && (Int(n, "appid") is { } app) && (app > 0) && (app <= uint.MaxValue)) {
 					done[cat] = (uint) app;
 				}
 			}
@@ -161,11 +295,17 @@ public static class SaleEventPages {
 	}
 
 	/// <summary>The games this account played that fit a category, with minutes played, from GetNominationRecommendations.</summary>
-	public static List<(uint App, int Minutes)> ParsePlayed(string? json) {
+	public static List<(uint App, int Minutes)> ParsePlayed(string? json) => ReadPlayed(json) ?? [];
+
+	/// <summary>
+	/// The same, but null when it isn't Steam's answer at all - so "nothing it played fits" (an empty list, which Steam
+	/// says by leaving played_app out) isn't mistaken for a call that failed.
+	/// </summary>
+	public static List<(uint App, int Minutes)>? ReadPlayed(string? json) {
 		List<(uint, int)> played = [];
 
 		if (Response(json) is not { } body) {
-			return played;
+			return null;
 		}
 
 		using (body) {
@@ -215,13 +355,21 @@ public static class SaleEventPages {
 	/// The game to nominate: <paramref name="mode"/> 0 the one played most, 1 any of them - always one this account played,
 	/// and one not already nominated in another category while there's a choice.
 	/// </summary>
-	public static uint? PickNominee(IReadOnlyList<(uint App, int Minutes)> played, int mode, IReadOnlySet<uint> used, Random rng) {
-		List<(uint App, int Minutes)> fresh = [.. played.Where(p => !used.Contains(p.App))];
-		List<(uint App, int Minutes)> from = fresh.Count > 0 ? fresh : [.. played];
+	public static uint? PickNominee(IReadOnlyList<(uint App, int Minutes)> played, int mode, IReadOnlySet<uint> used, Random rng) =>
+		PickNominee(played, mode, used.ToDictionary(static a => a, static _ => 1), rng);
 
-		if (from.Count == 0) {
+	/// <summary>
+	/// The same, counting how many categories each game already has: only the fitting games used the fewest times are
+	/// picked from. A game nominated twice already goes in a third category only when every other one that fits has been
+	/// used as often - so one game isn't put in six categories while others it played fit too.
+	/// </summary>
+	public static uint? PickNominee(IReadOnlyList<(uint App, int Minutes)> played, int mode, IReadOnlyDictionary<uint, int> uses, Random rng) {
+		if (played.Count == 0) {
 			return null;
 		}
+
+		int fewest = played.Min(p => uses.GetValueOrDefault(p.App));
+		List<(uint App, int Minutes)> from = [.. played.Where(p => uses.GetValueOrDefault(p.App) == fewest)];
 
 		return mode == 1 ? from[rng.Next(from.Count)].App : from.OrderByDescending(static p => p.Minutes).ThenBy(static p => p.App).First().App;
 	}
@@ -302,6 +450,9 @@ public sealed class SaleEventsEngine(ISaleWeb web, Func<BotConfig> cfg, Func<uin
 	/// <summary>Nominate source: picked from "games you played" on the nominations page.</summary>
 	public const int SourcePlayed = 6;
 
+	/// <summary>Nominate source of the page's own Skip button (no eligible games), sent with <see cref="SaleEventPages.SkipApp"/>.</summary>
+	public const int SourceSkip = 0;
+
 	public SaleEventPages.Awards? Nominations { get; private set; }
 	public SaleEventPages.Awards? Voting { get; private set; }
 	public bool NominationsOpen { get; private set; }
@@ -325,6 +476,22 @@ public sealed class SaleEventsEngine(ISaleWeb web, Func<BotConfig> cfg, Func<uin
 
 	/// <summary>A refusal that ended this round early (e.g. a limited account), said once in the status.</summary>
 	public string? Refusal { get; private set; }
+
+	/// <summary>Whether the last <see cref="StepAsync"/> asked Steam to nominate or vote - taken or not. Reads alone don't count.</summary>
+	public bool LastStepSent { get; private set; }
+
+	private readonly List<Said> _failures = [];
+
+	/// <summary>What Steam didn't take since the last call, for the log as failures - never as "nominated".</summary>
+	public List<Said> TakeFailures() {
+		List<Said> all = [.. _failures];
+		_failures.Clear();
+
+		return all;
+	}
+
+	/// <summary>Categories answered with a skip (Steam's page's own Skip: nothing this account played fits).</summary>
+	public int Skipped => Nominated?.Values.Count(static a => a == SaleEventPages.SkipApp) ?? 0;
 
 	/// <summary>Read what's running. Only the pages for the kinds that are switched on.</summary>
 	public async Task LookAsync(DateTime nowUtc, CancellationToken ct) {
@@ -388,6 +555,8 @@ public sealed class SaleEventsEngine(ISaleWeb web, Func<BotConfig> cfg, Func<uin
 	/// or Steam didn't take it.
 	/// </summary>
 	public async Task<Said?> StepAsync(CancellationToken ct) {
+		LastStepSent = false;
+
 		foreach (int category in NominationsLeft().Take(1)) {
 			return await NominateAsync(category, ct).ConfigureAwait(false);
 		}
@@ -401,25 +570,38 @@ public sealed class SaleEventsEngine(ISaleWeb web, Func<BotConfig> cfg, Func<uin
 
 	private async Task<Said?> NominateAsync(int category, CancellationToken ct) {
 		string ask = JsonSerializer.Serialize(new { category_id = category });
-		List<(uint App, int Minutes)> played = SaleEventPages.ParsePlayed(await web.ApiGetAsync("ISteamAwardsService", "GetNominationRecommendations",
+		List<(uint App, int Minutes)>? played = SaleEventPages.ReadPlayed(await web.ApiGetAsync("ISteamAwardsService", "GetNominationRecommendations",
 			new Dictionary<string, string> { ["input_json"] = ask }, ct).ConfigureAwait(false));
+		string name = CategoryName(category);
 
-		HashSet<uint> used = Nominated == null ? [] : [.. Nominated.Values];
-
-		if (SaleEventPages.PickNominee(played, cfg().SaleNominatePick, used, rng) is not { } app) {
-			// Nothing it played fits this category: left empty rather than a game it never touched.
+		if (played == null) {
+			// Steam didn't answer the read: nothing is known about this category, so it is neither nominated nor skipped -
+			// asked again at the next look. (1.8.0 took this for "nothing fits", the same as an empty list.)
 			_refused.Add("n" + category);
 
 			return null;
 		}
 
-		string body = JsonSerializer.Serialize(new { category_id = category, nominated_id = app, source = SourcePlayed });
+		// How often each game is in a category already - the skip placeholder isn't a game.
+		Dictionary<int, uint> now = Nominated ?? [];
+		Dictionary<uint, int> uses = now.Values.Where(static a => a != SaleEventPages.SkipApp).GroupBy(static a => a).ToDictionary(static g => g.Key, static g => g.Count());
+		uint? pick = SaleEventPages.PickNominee(played, cfg().SaleNominatePick, uses, rng);
+
+		// 2.0.5: nothing it played fits (VR, or a robot that played one game from this year): skipped, as the page's own
+		// Skip button does. Left empty, the category stayed "to do" for ever - looked at again every hour, never said, and
+		// the count stuck short of all of them (13 of 14, 8 of 14).
+		uint app = pick ?? SaleEventPages.SkipApp;
+		string body = JsonSerializer.Serialize(new { category_id = category, nominated_id = app, source = pick == null ? SourceSkip : SourcePlayed });
+		LastStepSent = true;
 		Dictionary<int, uint>? after = SaleEventPages.ParseNominations(await web.ApiGetAsync("ISteamAwardsService", "Nominate",
 			new Dictionary<string, string> { ["input_json"] = body }, ct).ConfigureAwait(false));
 
 		if ((after == null) || !after.TryGetValue(category, out uint took) || (took != app)) {
 			_refused.Add("n" + category);
 			Refusal ??= "nomination";
+			_failures.Add(pick == null
+				? new Said("Steam didn't take skipping the Steam Awards category {0} - it tries again at the next look", name)
+				: new Said("Steam didn't take the nomination of {0} in the Steam Awards category {1} - it tries again at the next look", GameNames.Of(app), name));
 
 			return null;
 		}
@@ -432,8 +614,14 @@ public sealed class SaleEventsEngine(ISaleWeb web, Func<BotConfig> cfg, Func<uin
 			Nominated[id] = nominated;
 		}
 
-		return new Said("nominated {0} for a Steam Award", GameNames.Of(app));
+		return pick == null
+			? new Said("skipped the Steam Awards category {0} - nothing this account played fits it", name)
+			: new Said("nominated {0} for a Steam Award", GameNames.Of(app));
 	}
+
+	/// <summary>A category's name as the page shows it, or its number when the page didn't give one.</summary>
+	private string CategoryName(int category) =>
+		Nominations?.Categories.FirstOrDefault(c => c.Id == category) is { Name.Length: > 0 } c ? c.Name : category.ToString(CultureInfo.InvariantCulture);
 
 	private async Task<Said?> VoteAsync(SaleEventPages.Category category, CancellationToken ct) {
 		if (SaleEventPages.PickVote(category.Finalists, minutesOn, rng) is not { } app) {
@@ -442,6 +630,7 @@ public sealed class SaleEventsEngine(ISaleWeb web, Func<BotConfig> cfg, Func<uin
 			return null;
 		}
 
+		LastStepSent = true;
 		Dictionary<int, uint>? after = SaleEventPages.ParseVotes(await web.ApiPostAsync("IStoreSalesService", "SetVote", new Dictionary<string, string> {
 			["voteid"] = category.Id.ToString(CultureInfo.InvariantCulture),
 			["appid"] = app.ToString(CultureInfo.InvariantCulture),
@@ -451,6 +640,7 @@ public sealed class SaleEventsEngine(ISaleWeb web, Func<BotConfig> cfg, Func<uin
 		if ((after == null) || !after.TryGetValue(category.Id, out uint took) || (took != app)) {
 			_refused.Add("v" + category.Id);
 			Refusal ??= "vote";
+			_failures.Add(new Said("Steam didn't take the vote for {0} in the Steam Awards - it tries again at the next look", GameNames.Of(app)));
 
 			return null;
 		}
@@ -554,6 +744,11 @@ public sealed class SaleEvents(Bot bot) : BotModule(bot) {
 			List<Said> did = await DoStepsAsync(_engine, human, Gap(c, human), static (wait, token) => Task.Delay(wait, token),
 				() => Bot.IsOnline && !Bot.Paused, ct).ConfigureAwait(false);
 
+			// 2.0.5: what Steam didn't take is a failure in the log, never a "nominated" line.
+			foreach (Said failed in _engine.TakeFailures()) {
+				Log.Warn(failed, Bot.Name);
+			}
+
 			foreach (Said one in did) {
 				Log.Reward(one, Bot.Name, topic: Topic.FreeStuff);
 
@@ -566,7 +761,7 @@ public sealed class SaleEvents(Bot bot) : BotModule(bot) {
 				}
 			}
 
-			if (human) {
+			if (human && _engine.LastStepSent) {
 				(int lo, int hi) = Gap(c, human);
 				_gate.Space(lo, hi);
 			}
@@ -575,9 +770,13 @@ public sealed class SaleEvents(Bot bot) : BotModule(bot) {
 		_status = Summary();
 	}
 
+	/// <summary>Why a human-mode account's next award step isn't now (asleep, settling in after waking, the gap) - empty when it isn't waiting.</summary>
+	private Said WaitingWhy() => Bot.Cfg.LegitMode && _engine.AnythingLeft && (_gate != null) ? _gate.Waiting() : default;
+
 	/// <summary>
 	/// The steps due now: on a robot all of them, <paramref name="gap"/> seconds apart (picked at random in between); on a
-	/// human-mode account just one - the gate spaces out the next by the human gap, in minutes.
+	/// human-mode account just one - the gate spaces out the next by the human gap, in minutes. A step that sent nothing
+	/// (Steam didn't answer a read) isn't one: it goes on to the next category rather than spending a whole human gap on it.
 	/// </summary>
 	public static async Task<List<Said>> DoStepsAsync(SaleEventsEngine engine, bool human, (int Lo, int Hi) gap,
 		Func<TimeSpan, CancellationToken, Task> wait, Func<bool> mayGoOn, CancellationToken ct) {
@@ -589,7 +788,15 @@ public sealed class SaleEvents(Bot bot) : BotModule(bot) {
 				did.Add(one);
 			}
 
-			if (human || !engine.AnythingLeft) {
+			if (!engine.AnythingLeft) {
+				break;
+			}
+
+			if (!engine.LastStepSent) {
+				continue;
+			}
+
+			if (human) {
 				break;
 			}
 
@@ -602,7 +809,9 @@ public sealed class SaleEvents(Bot bot) : BotModule(bot) {
 	/// <summary>The account card's line: what's on and how far it got, or nothing when no event is on.</summary>
 	private Said Summary() {
 		if (_engine.NominationsOpen && (_engine.Nominations is { } n)) {
-			return new Said("Steam Awards nominations: {0} of {1} done", _engine.Nominated?.Count ?? 0, n.Categories.Count);
+			Said line = new("Steam Awards nominations: {0} of {1} done", _engine.Nominated?.Count ?? 0, n.Categories.Count);
+
+			return WaitingWhy() is { IsEmpty: false } why ? new Said("{0} - next one waits: {1}", line, why) : line;
 		}
 
 		if (_engine.VotingOpen && (_engine.Voting is { } v)) {
@@ -665,6 +874,14 @@ public sealed class SaleEvents(Bot bot) : BotModule(bot) {
 			lines.Add(_engine.NextFestOn && (_engine.NextFest is { } w)
 				? Indent + new Said("Steam Next Fest: on until {0}", Fmt.Clock(w.End))
 				: Indent + new Said("Steam Next Fest: not on"));
+		}
+
+		if (c.SaleAwardsNominate && _engine.NominationsOpen && (_engine.Skipped > 0)) {
+			lines.Add(Indent + new Said("{0} of them skipped - nothing this account played fits them", _engine.Skipped));
+		}
+
+		if (WaitingWhy() is { IsEmpty: false } why) {
+			lines.Add(Indent + new Said("next award step waits: {0}", why));
 		}
 
 		if (_engine.Refusal != null) {

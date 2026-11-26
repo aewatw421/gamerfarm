@@ -3471,7 +3471,14 @@
     "gamer.farm dashboard sign-in code: {0}\n\nSomebody at {1} ({2}) opened a dashboard sign-in link from outside your home. The code works for {3} minutes.\n\nNot you? Don't give the code to anyone. Send /visitors signout here, then change the dashboard password.": "Code de connexion au tableau de bord gamer.farm : {0}\n\nQuelqu'un à {1} ({2}) a ouvert un lien de connexion au tableau de bord depuis l'extérieur de chez vous. Le code est valable {3} minutes.\n\nCe n'est pas vous ? Ne donnez le code à personne. Envoyez /visitors signout ici, puis changez le mot de passe du tableau de bord.",
     "A sign-in link for the dashboard - it works once, for {0} seconds:": "Un lien de connexion au tableau de bord - il marche une fois, pendant {0} secondes :",
     "There's no dashboard password, so it opens on this PC without one anyway.": "Le tableau de bord n'a pas de mot de passe, il s'ouvre donc sans sur ce PC de toute façon.",
-    "That sign-in link has run out. Sign in with the password, or get a new link.": "Ce lien de connexion a expiré. Connectez-vous avec le mot de passe, ou demandez un nouveau lien."
+    "That sign-in link has run out. Sign in with the password, or get a new link.": "Ce lien de connexion a expiré. Connectez-vous avec le mot de passe, ou demandez un nouveau lien.",
+    "skipped the Steam Awards category {0} - nothing this account played fits it": "catégorie {0} des Steam Awards passée - rien de ce que ce compte a joué n'y correspond",
+    "Steam didn't take skipping the Steam Awards category {0} - it tries again at the next look": "Steam n'a pas accepté de passer la catégorie {0} des Steam Awards - nouvel essai au prochain coup d'œil",
+    "Steam didn't take the nomination of {0} in the Steam Awards category {1} - it tries again at the next look": "Steam n'a pas accepté la nomination de {0} dans la catégorie {1} des Steam Awards - nouvel essai au prochain coup d'œil",
+    "Steam didn't take the vote for {0} in the Steam Awards - it tries again at the next look": "Steam n'a pas accepté le vote pour {0} aux Steam Awards - nouvel essai au prochain coup d'œil",
+    "{0} - next one waits: {1}": "{0} - la suivante attend : {1}",
+    "{0} of them skipped - nothing this account played fits them": "{0} d'entre elles passées - rien de ce que ce compte a joué n'y correspond",
+    "next award step waits: {0}": "prochaine étape des prix en attente : {0}"
   },
   "settings": {
     "BackupToTelegram": {
@@ -4112,7 +4119,7 @@
     },
     "SaleAwardsNominate": {
       "label": "Nommer aux Steam Awards",
-      "tip": "Fin novembre, nomme un jeu dans chaque catégorie des Steam Awards, pour le badge de nomination. Par exemple, un jeu auquel ce compte a joué 300 heures va dans la catégorie qui lui convient selon Steam. Seulement des jeux auxquels ce compte a joué, choisis comme réglé dans « Quel jeu nommer » ; une catégorie sans aucun reste vide. Désactivé : pas de nominations."
+      "tip": "Fin novembre, nomme un jeu dans chaque catégorie des Steam Awards, pour le badge de nomination. Par exemple, un jeu auquel ce compte a joué 300 heures va dans la catégorie qui lui convient selon Steam. Seulement des jeux auxquels ce compte a joué, choisis comme réglé dans « Quel jeu nommer » ; une catégorie sans aucun est passée, comme le fait le bouton Passer de la page. Désactivé : pas de nominations."
     },
     "SaleAwardsVote": {
       "label": "Voter aux Steam Awards",

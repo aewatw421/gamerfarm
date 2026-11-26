@@ -20866,6 +20866,22 @@ if (GamerFarm.Core.SelfUpdate.Supported) {
 		vote is { Categories.Count: 11, Votes.Count: 2, SaleAppId: 4147080 } && vote.Categories[0].Finalists.Count == 5 && vote.Votes[131] == 730);
 	Check("sale events: a page without the awards config (signed out, not running) reads as nothing", GamerFarm.Modules.SaleEventPages.ParseAwards(nonePage) == null
 		&& GamerFarm.Modules.SaleEventPages.ParseAwards(null) == null && GamerFarm.Modules.SaleEventPages.ParseAwards("<div data-steam_awards_config=\"not json\"></div>") == null);
+	string modernPage = Sample("steamawards-nominations-2026.html");
+	GamerFarm.Modules.SaleEventPages.Awards? modern = GamerFarm.Modules.SaleEventPages.ParseAwards(modernPage);
+	Check("sale events: the 2026 page's React Query cache is read - categories, sale app id, nominations, badge tasks",
+		modern is { Categories.Count: 3, Votes.Count: 1, SaleAppId: 5350740, Quests.Count: 4 } && modern.Categories[0].Id == 150
+		&& modern.Votes[150] == 1245620 && modern.Quests.Count(static q => q) == 1,
+		$"{modern?.Categories.Count} categories, {modern?.Votes.Count} votes, sale {modern?.SaleAppId}, {modern?.Quests.Count} quests");
+	Check("sale events: nominations are open on the 2026 page too (voting starts 17 December)",
+		GamerFarm.Modules.SaleEventPages.NominationsOpen(modern, nomNow) && !GamerFarm.Modules.SaleEventPages.VotingOpen(modern, nomNow));
+	// The real nominations page as Steam served it on 25 November 2026, signed out: all 14 categories, voting from 17 December.
+	GamerFarm.Modules.SaleEventPages.Awards? live = GamerFarm.Modules.SaleEventPages.ParseAwards(Sample("steamawards-nominations-2026-live.html"));
+	Check("sale events: Steam's real 2026 nominations page reads - 14 categories, the sale's app id, nominations open",
+		live is { Categories.Count: 14, Votes.Count: 0, SaleAppId: 5350740 } && live.Categories[0].Id == 150
+		&& GamerFarm.Modules.SaleEventPages.NominationsOpen(live, nomNow) && !GamerFarm.Modules.SaleEventPages.VotingOpen(live, nomNow),
+		$"{live?.Categories.Count} categories, {live?.Votes.Count} votes, sale {live?.SaleAppId}");
+	Check("sale events: an ssr-data script without award state reads as nothing",
+		GamerFarm.Modules.SaleEventPages.ParseAwards("<script id=\"valve-ssr-data\">{}</script>") == null);
 	Check("sale events: nominations are open in late November, before voting starts", GamerFarm.Modules.SaleEventPages.NominationsOpen(nom, nomNow)
 		&& !GamerFarm.Modules.SaleEventPages.VotingOpen(nom, nomNow));
 	Check("sale events: nominations aren't open months ahead, or once voting has started", !GamerFarm.Modules.SaleEventPages.NominationsOpen(nom, octNow.AddMonths(-3))
@@ -20877,8 +20893,9 @@ if (GamerFarm.Core.SelfUpdate.Supported) {
 	(DateTime Start, DateTime End)? fest = GamerFarm.Modules.SaleEventPages.ParseEventWindow(festPage);
 	Check("sale events: Next Fest's dates come from its page (12-19 Oct 2026)", fest is { } fw && fw.Start == new DateTime(2026, 10, 12, 17, 0, 0, DateTimeKind.Utc)
 		&& fw.End == new DateTime(2026, 10, 19, 17, 0, 0, DateTimeKind.Utc) && GamerFarm.Modules.SaleEventPages.ParseEventWindow(nonePage) == null);
-	Check("sale events: Steam's answers - nominations (the skip placeholder isn't one), votes, played games",
-		GamerFarm.Modules.SaleEventPages.ParseNominations(Sample("GetUserNominations-two.json")) is { Count: 1 } two && two[130] == 1245620
+	Check("sale events: Steam's answers - nominations (a skipped category is answered, as the skip placeholder), votes, played games",
+		GamerFarm.Modules.SaleEventPages.ParseNominations(Sample("GetUserNominations-two.json")) is { Count: 2 } two && two[130] == 1245620
+		&& two[131] == GamerFarm.Modules.SaleEventPages.SkipApp
 		&& GamerFarm.Modules.SaleEventPages.ParseNominations(Sample("GetUserNominations-empty.json")) is { Count: 0 }
 		&& GamerFarm.Modules.SaleEventPages.ParseNominations("<html>") == null
 		&& GamerFarm.Modules.SaleEventPages.ParseVotes(Sample("SetVote.json")) is { Count: 3 } v3 && v3[132] == 1145360
@@ -20911,6 +20928,11 @@ if (GamerFarm.Core.SelfUpdate.Supported) {
 	Task<List<GamerFarm.Core.Said>> Steps(GamerFarm.Modules.SaleEventsEngine e) =>
 		GamerFarm.Modules.SaleEvents.DoStepsAsync(e, false, (0, 0), (_, _) => Task.CompletedTask, () => true, CancellationToken.None);
 
+	var (modernWeb, modernEngine) = await Look(Web(modernPage, overPage, festPage), robot, nomNow);
+	List<GamerFarm.Core.Said> modernDid = await Steps(modernEngine);
+	Check("sale events: with the 2026 page the robot nominates in every category the page lists",
+		(modernWeb.Nominates.Count == 3) && (modernDid.Count == 3) && !modernEngine.AnythingLeft, $"{modernWeb.Nominates.Count} nominations");
+
 	var (offWeb, offEngine) = await Look(Web(overPage, overPage, festPage), robot, octNow);
 	List<GamerFarm.Core.Said> offDid = await Steps(offEngine);
 	Check("sale events: outside an event it does nothing - no nomination, no vote, no Steam API call that changes anything",
@@ -20921,9 +20943,9 @@ if (GamerFarm.Core.SelfUpdate.Supported) {
 	List<TimeSpan> robotWaits = [];
 	List<GamerFarm.Core.Said> nomDid = await GamerFarm.Modules.SaleEvents.DoStepsAsync(nomEngine, false, GamerFarm.Modules.SaleEvents.Gap(robot, false),
 		(w, _) => { robotWaits.Add(w); return Task.CompletedTask; }, () => true, CancellationToken.None);
-	Check("sale events: a robot nominates in every category left straight away (10 - category 130 was done)", (nomWeb.Nominates.Count == 10) && (nomDid.Count == 10)
-		&& !nomWeb.Nominates.Any(n => n.Category == 130) && !nomEngine.AnythingLeft, $"{nomWeb.Nominates.Count}");
-	Check("sale events: ...a few seconds apart (5-20 s by default), not all at once", (robotWaits.Count == 9) && robotWaits.All(w => w >= TimeSpan.FromSeconds(5) && w <= TimeSpan.FromSeconds(20)));
+	Check("sale events: a robot nominates in every category left straight away (9 - 130 was nominated and 131 skipped on Steam)", (nomWeb.Nominates.Count == 9) && (nomDid.Count == 9)
+		&& !nomWeb.Nominates.Any(n => n.Category is 130 or 131) && !nomEngine.AnythingLeft, $"{nomWeb.Nominates.Count}");
+	Check("sale events: ...a few seconds apart (5-20 s by default), not all at once", (robotWaits.Count == 8) && robotWaits.All(w => w >= TimeSpan.FromSeconds(5) && w <= TimeSpan.FromSeconds(20)));
 	Check("sale events: every nomination is a game the account played, sent as \"from the games you played\" (source 6)",
 		nomWeb.Nominates.All(n => (n.App is 1245620 or 367520 or 105600) && (n.Source == 6)));
 	Check("sale events: the first goes to the most played game it hadn't used yet", nomWeb.Nominates[0].App == 367520);
@@ -20937,14 +20959,96 @@ if (GamerFarm.Core.SelfUpdate.Supported) {
 	Check("sale events: signed out or paused - it stops at once", stopWeb.Nominates.Count == 0);
 
 	var (emptyWeb, emptyEngine) = await Look(Web(nomPage, overPage, festPage, recs: Sample("GetNominationRecommendations-none.json")), robot, nomNow);
-	await Steps(emptyEngine);
-	Check("sale events: no played game fits → the categories are left empty, nothing nominated", (emptyWeb.Nominates.Count == 0) && !emptyEngine.AnythingLeft);
+	List<GamerFarm.Core.Said> emptyDid = await Steps(emptyEngine);
+	Check("sale events: no played game fits → each category is skipped the way the page's Skip button does (2.0.5), never a game it didn't play",
+		(emptyWeb.Nominates.Count == 11) && emptyWeb.Nominates.All(n => (n.App == GamerFarm.Modules.SaleEventPages.SkipApp) && (n.Source == 0))
+		&& !emptyEngine.AnythingLeft && (emptyEngine.Skipped == 11) && (emptyEngine.Nominated?.Count == 11)
+		&& emptyDid.All(d => d.ToEnglish().StartsWith("skipped the Steam Awards category ", StringComparison.Ordinal)),
+		$"{emptyWeb.Nominates.Count} sent, {emptyEngine.Skipped} skipped; {string.Join(" | ", emptyDid.Select(d => d.ToEnglish()))}");
 
 	var (refusedWeb, refusedEngine) = await Look(Web(nomPage, overPage, festPage), robot, nomNow);
 	refusedWeb.RefuseNominations = true;
-	await Steps(refusedEngine);
+	List<GamerFarm.Core.Said> refusedDid = await Steps(refusedEngine);
+	List<GamerFarm.Core.Said> refusedFails = refusedEngine.TakeFailures();
 	Check("sale events: Steam refusing (a limited account) - each category tried once, not hammered, and said",
 		(refusedWeb.Nominates.Count == 11) && (refusedWeb.Nominates.Select(n => n.Category).Distinct().Count() == 11) && !refusedEngine.AnythingLeft && (refusedEngine.Refusal != null));
+	Check("sale events: a nomination Steam didn't take is a failure for the log, never a \"nominated\" line (2.0.5)",
+		(refusedDid.Count == 0) && (refusedFails.Count == 11) && (refusedEngine.Nominated?.Count == 0)
+		&& refusedFails.All(f => f.ToEnglish().StartsWith("Steam didn't take the nomination of ", StringComparison.Ordinal) && f.ToEnglish().Contains(" - it tries again at the next look", StringComparison.Ordinal))
+		&& (refusedEngine.TakeFailures().Count == 0),
+		string.Join(" | ", refusedFails.Take(2).Select(f => f.ToEnglish())));
+
+	// 2.0.5: the real 2026 page with Steam's real answers for two robot accounts on 25 November (game ids only, no account
+	// ids): each category gets its own list of the games played that fit it, Hall of Fame and Labor of Love their older
+	// games, VR none. With an empty category left empty, the count stuck at 13 and 8 of 14 and was retried every look in silence.
+	string livePage = Sample("steamawards-nominations-2026-live.html");
+	string Played(params (uint App, int Minutes)[] apps) => apps.Length == 0 ? """{"response":{}}"""
+		: System.Text.Json.JsonSerializer.Serialize(new { response = new { played_app = apps.Select(a => new { appid = a.App, playtime = a.Minutes }) } });
+	(uint, int)[] oldRecent = [(3280350, 432), (2868840, 55), (2483190, 31), (3764200, 18), (3357650, 13), (1962700, 7)];
+	FakeSaleWeb oldWeb = Web(livePage, overPage, festPage);
+	foreach ((int c, string? r) in new (int, string?)[] {
+		(150, Played((1245620, 218282))), (151, Played(oldRecent)), (152, Played()), (153, Played((252490, 380165), (440, 272933), (108600, 174661), (570, 30))),
+		(154, Played(oldRecent)), (155, Played(oldRecent)), (156, Played(oldRecent)), (157, Played(oldRecent)),
+		(158, Played((2868840, 55), (2483190, 31), (3357650, 13), (1962700, 7))), (159, Played((3764200, 18))), (160, Played((2868840, 55), (3357650, 13))),
+		(161, Played((3280350, 432))), (162, Played((3764200, 18), (3357650, 13))), (163, Played((1962700, 7))) }) {
+		oldWeb.RecommendationsByCategory[c] = r;
+	}
+	var (_, oldEngine) = await Look(oldWeb, robot, nomNow);
+	await Steps(oldEngine);
+	Dictionary<uint, int> oldUses = oldWeb.Nominates.Where(n => n.App != GamerFarm.Modules.SaleEventPages.SkipApp).GroupBy(n => n.App).ToDictionary(g => g.Key, g => g.Count());
+	Check("sale events: real 2026 answers (old) - all 14 categories answered: 13 games it played, VR skipped, none left to do",
+		(oldWeb.Nominates.Count == 14) && (oldEngine.Nominated?.Count == 14) && (oldEngine.Skipped == 1) && !oldEngine.AnythingLeft
+		&& oldWeb.Nominates.Single(n => n.Category == 152) is { App: GamerFarm.Modules.SaleEventPages.SkipApp, Source: 0 } && (oldEngine.TakeFailures().Count == 0),
+		$"{oldWeb.Nominates.Count} sent, {oldEngine.Nominated?.Count} done, {oldEngine.Skipped} skipped");
+	Check("sale events: ...a game goes in another category only when every other one that fits is used as often - no game three times (2.0.4 put one in 3)",
+		(oldUses.Values.Max() == 2) && (oldWeb.Nominates.Single(n => n.Category == 162).App == 3357650) && (oldWeb.Nominates.Single(n => n.Category == 158).App == 1962700),
+		string.Join(",", oldWeb.Nominates.Select(n => $"{n.Category}:{n.App}")));
+	Check("sale events: ...each nomination is a game Steam listed as played for that very category",
+		oldWeb.Nominates.Where(n => n.Source == 6).All(n => GamerFarm.Modules.SaleEventPages.ParsePlayed(oldWeb.RecommendationsByCategory[n.Category]).Any(p => p.App == n.App)));
+
+	FakeSaleWeb kylroWeb = Web(livePage, overPage, festPage, recs: Played());
+	foreach (int c in new[] { 151, 154, 155, 156, 157, 163 }) {
+		kylroWeb.RecommendationsByCategory[c] = Played((4678800, 387));
+	}
+	kylroWeb.RecommendationsByCategory[150] = Played((578080, 255419));
+	kylroWeb.RecommendationsByCategory[153] = Played((440, 249736), (304930, 54026), (570, 35158));
+	var (_, kylroEngine) = await Look(kylroWeb, robot, nomNow);
+	await Steps(kylroEngine);
+	Check("sale events: real 2026 answers (kylro, one game from this year) - 8 nominated, the 6 with nothing played skipped, 14 of 14 answered",
+		(kylroEngine.Nominated?.Count == 14) && (kylroEngine.Skipped == 6) && !kylroEngine.AnythingLeft
+		&& (kylroWeb.Nominates.Count(n => n.App == 4678800) == 6) && kylroWeb.Nominates.Where(n => n.Category is 152 or (>= 158 and <= 162)).All(n => n.App == GamerFarm.Modules.SaleEventPages.SkipApp),
+		$"{kylroEngine.Nominated?.Count} done, {kylroEngine.Skipped} skipped");
+
+	// A skip already on Steam (made on the page) is an answered category - not asked again.
+	var (_, skipEngine) = await Look(Web(nomPage, overPage, festPage, Sample("GetUserNominations-two.json")), robot, nomNow);
+	Check("sale events: a category skipped on Steam's page counts as done, isn't nominated again, and isn't a game in use",
+		!skipEngine.NominationsLeft().Contains(131) && !skipEngine.NominationsLeft().Contains(130) && (skipEngine.NominationsLeft().Count() == 9) && (skipEngine.Skipped == 1));
+
+	// Steam took the call but kept the category's old game: a failure, not "nominated".
+	var (keptWeb, keptEngine) = await Look(Web(nomPage, overPage, festPage), robot, nomNow);
+	keptWeb.KeepOldNomination = true;
+	List<GamerFarm.Core.Said> keptDid = await GamerFarm.Modules.SaleEvents.DoStepsAsync(keptEngine, true, (0, 0), (_, _) => Task.CompletedTask, () => true, CancellationToken.None);
+	Check("sale events: Steam's answer still showing another game in the category - logged as not taken, the step counted",
+		(keptDid.Count == 0) && (keptEngine.TakeFailures().Count == 1) && keptEngine.LastStepSent && (keptWeb.Nominates.Count == 1));
+
+	// Steam not answering the read of a category: it isn't skipped (that would be a guess), and on a human-mode account
+	// it doesn't use up the whole step - the next category is nominated in the same turn.
+	FakeSaleWeb blankWeb = Web(nomPage, overPage, festPage);
+	blankWeb.RecommendationsByCategory[130] = null;
+	var (_, blankEngine) = await Look(blankWeb, robot, nomNow);
+	List<GamerFarm.Core.Said> blankDid = await GamerFarm.Modules.SaleEvents.DoStepsAsync(blankEngine, true, (0, 0),
+		(_, _) => throw new InvalidOperationException("a human-mode step never waits in-line"), () => true, CancellationToken.None);
+	Check("sale events: a category whose read failed is neither skipped nor nominated; a human-mode step goes on to the next one",
+		(blankDid.Count == 1) && (blankWeb.Nominates.Count == 1) && (blankWeb.Nominates[0].Category == 131) && !blankWeb.Nominates.Any(n => n.Category == 130)
+		&& blankEngine.AnythingLeft && !blankEngine.NominationsLeft().Contains(130));
+	var (_, blankAgain) = await Look(blankWeb, robot, nomNow);
+	Check("sale events: ...and it's asked again at the next look", blankAgain.NominationsLeft().Contains(130));
+
+	Check("sale events: picking by uses - the least used fitting game, most played among those",
+		GamerFarm.Modules.SaleEventPages.PickNominee([(3764200u, 18), (3357650u, 13)], 0, new Dictionary<uint, int> { [3764200] = 2, [3357650] = 1 }, pickRng) == 3357650
+		&& GamerFarm.Modules.SaleEventPages.PickNominee([(3764200u, 18)], 0, new Dictionary<uint, int> { [3764200] = 2 }, pickRng) == 3764200
+		&& GamerFarm.Modules.SaleEventPages.PickNominee([], 0, new Dictionary<uint, int>(), pickRng) == null);
+	Check("sale events: the 2026 page's category names are read (Hall of Fame first)", live!.Categories[0].Name == "Hall of Fame" && live.Categories.All(c => c.Name.Length > 0));
 
 	var (voteWeb, voteEngine) = await Look(Web(overPage, votePage, festPage), robot, voteNow);
 	await Steps(voteEngine);
@@ -30556,7 +30660,13 @@ sealed class FakeSaleWeb : GamerFarm.Modules.ISaleWeb {
 	public Dictionary<string, string> Pages { get; } = [];
 	public string UserNominations { get; set; } = "";
 	public string Recommendations { get; set; } = "";
+
+	/// <summary>2.0.5: Steam's answer per category (null: the read failed), as a real account gets it - each category its own list.</summary>
+	public Dictionary<int, string?> RecommendationsByCategory { get; } = [];
 	public bool RefuseNominations { get; set; }
+
+	/// <summary>2.0.5: Steam answers a nomination with eresult 1 but keeps the game the category had (the answer lists it, not the new one).</summary>
+	public bool KeepOldNomination { get; set; }
 
 	/// <summary>Nominate answers with only the nomination just made (1.8.0), not all of them.</summary>
 	public bool OnlyNewInAnswer { get; set; }
@@ -30583,7 +30693,10 @@ sealed class FakeSaleWeb : GamerFarm.Modules.ISaleWeb {
 		}
 
 		if (method == "GetNominationRecommendations") {
-			return Task.FromResult<string?>(Recommendations);
+			using System.Text.Json.JsonDocument r = System.Text.Json.JsonDocument.Parse(args!["input_json"]);
+			int rc = r.RootElement.GetProperty("category_id").GetInt32();
+
+			return Task.FromResult(RecommendationsByCategory.TryGetValue(rc, out string? own) ? own : Recommendations);
 		}
 
 		if (method == "Nominate") {
@@ -30596,7 +30709,11 @@ sealed class FakeSaleWeb : GamerFarm.Modules.ISaleWeb {
 				return Task.FromResult<string?>("""{"response":{}}""");
 			}
 
-			_nominated[cat] = app;
+			if (KeepOldNomination) {
+				_nominated.TryAdd(cat, 1245620);
+			} else {
+				_nominated[cat] = app;
+			}
 
 			if (OnlyNewInAnswer) {
 				return Task.FromResult<string?>(System.Text.Json.JsonSerializer.Serialize(new { response = new { nominations = new[] { new { category_id = cat, appid = app, last_updated = 1 } } } }));

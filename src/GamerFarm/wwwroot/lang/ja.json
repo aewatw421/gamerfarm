@@ -3471,7 +3471,14 @@
     "gamer.farm dashboard sign-in code: {0}\n\nSomebody at {1} ({2}) opened a dashboard sign-in link from outside your home. The code works for {3} minutes.\n\nNot you? Don't give the code to anyone. Send /visitors signout here, then change the dashboard password.": "gamer.farm ダッシュボードのサインインコード: {0}\n\n{1} ({2}) の誰かが、自宅の外からダッシュボードのサインインリンクを開きました。コードは {3} 分間有効です。\n\n心当たりがない場合は、コードを誰にも教えないでください。ここで /visitors signout を送り、そのあとダッシュボードのパスワードを変更してください。",
     "A sign-in link for the dashboard - it works once, for {0} seconds:": "ダッシュボードのサインインリンク - 1 回だけ、{0} 秒間使えます:",
     "There's no dashboard password, so it opens on this PC without one anyway.": "ダッシュボードにパスワードがないため、この PC ではどのみちパスワードなしで開きます。",
-    "That sign-in link has run out. Sign in with the password, or get a new link.": "このサインインリンクは期限切れです。パスワードでサインインするか、新しいリンクを取得してください。"
+    "That sign-in link has run out. Sign in with the password, or get a new link.": "このサインインリンクは期限切れです。パスワードでサインインするか、新しいリンクを取得してください。",
+    "skipped the Steam Awards category {0} - nothing this account played fits it": "Steamアワードの部門「{0}」をスキップしました - このアカウントが遊んだゲームに該当するものがありません",
+    "Steam didn't take skipping the Steam Awards category {0} - it tries again at the next look": "Steamアワードの部門「{0}」のスキップをSteamが受け付けませんでした - 次の確認でもう一度試します",
+    "Steam didn't take the nomination of {0} in the Steam Awards category {1} - it tries again at the next look": "Steamアワードの部門「{1}」への{0}のノミネートをSteamが受け付けませんでした - 次の確認でもう一度試します",
+    "Steam didn't take the vote for {0} in the Steam Awards - it tries again at the next look": "Steamアワードでの{0}への投票をSteamが受け付けませんでした - 次の確認でもう一度試します",
+    "{0} - next one waits: {1}": "{0} - 次は待機中: {1}",
+    "{0} of them skipped - nothing this account played fits them": "うち{0}件はスキップ - このアカウントが遊んだゲームに該当するものがありません",
+    "next award step waits: {0}": "アワードの次のステップは待機中: {0}"
   },
   "settings": {
     "BackupToTelegram": {
@@ -4112,7 +4119,7 @@
     },
     "SaleAwardsNominate": {
       "label": "Steamアワードでノミネートする",
-      "tip": "11 月下旬に、Steamアワードの各部門にゲームをノミネートして、ノミネートのバッジをもらいます。例: このアカウントが 300 時間遊んだゲームを、Steam が合うとする部門に入れます。このアカウントが遊んだゲームだけを、「ノミネートするゲーム」の設定どおりに選びます。該当するゲームが無い部門は空のままです。オフ: ノミネートしません。"
+      "tip": "11 月下旬に、Steamアワードの各部門にゲームをノミネートして、ノミネートのバッジをもらいます。例: このアカウントが 300 時間遊んだゲームを、Steam が合うとする部門に入れます。このアカウントが遊んだゲームだけを、「ノミネートするゲーム」の設定どおりに選びます。該当するゲームが無い部門は、ページ自身のスキップボタンと同じようにスキップします。オフ: ノミネートしません。"
     },
     "SaleAwardsVote": {
       "label": "Steamアワードで投票する",

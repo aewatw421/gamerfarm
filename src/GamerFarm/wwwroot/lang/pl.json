@@ -3471,7 +3471,14 @@
     "gamer.farm dashboard sign-in code: {0}\n\nSomebody at {1} ({2}) opened a dashboard sign-in link from outside your home. The code works for {3} minutes.\n\nNot you? Don't give the code to anyone. Send /visitors signout here, then change the dashboard password.": "Kod logowania do panelu gamer.farm: {0}\n\nKtoś z {1} ({2}) otworzył link logowania do panelu spoza twojego domu. Kod działa przez {3} min.\n\nTo nie ty? Nikomu nie podawaj kodu. Wyślij tutaj /visitors signout, a potem zmień hasło do panelu.",
     "A sign-in link for the dashboard - it works once, for {0} seconds:": "Link logowania do panelu - działa raz, przez {0} s:",
     "There's no dashboard password, so it opens on this PC without one anyway.": "Panel nie ma hasła, więc na tym komputerze i tak otwiera się bez niego.",
-    "That sign-in link has run out. Sign in with the password, or get a new link.": "Ten link logowania wygasł. Zaloguj się hasłem albo weź nowy link."
+    "That sign-in link has run out. Sign in with the password, or get a new link.": "Ten link logowania wygasł. Zaloguj się hasłem albo weź nowy link.",
+    "skipped the Steam Awards category {0} - nothing this account played fits it": "pominięto kategorię {0} Steam Awards - nic, w co grało to konto, do niej nie pasuje",
+    "Steam didn't take skipping the Steam Awards category {0} - it tries again at the next look": "Steam nie przyjął pominięcia kategorii {0} Steam Awards - spróbuje ponownie przy następnym sprawdzeniu",
+    "Steam didn't take the nomination of {0} in the Steam Awards category {1} - it tries again at the next look": "Steam nie przyjął nominacji {0} w kategorii {1} Steam Awards - spróbuje ponownie przy następnym sprawdzeniu",
+    "Steam didn't take the vote for {0} in the Steam Awards - it tries again at the next look": "Steam nie przyjął głosu na {0} w Steam Awards - spróbuje ponownie przy następnym sprawdzeniu",
+    "{0} - next one waits: {1}": "{0} - następna czeka: {1}",
+    "{0} of them skipped - nothing this account played fits them": "{0} z nich pominięto - nic, w co grało to konto, do nich nie pasuje",
+    "next award step waits: {0}": "następny krok nagród czeka: {0}"
   },
   "settings": {
     "BackupToTelegram": {
@@ -4112,7 +4119,7 @@
     },
     "SaleAwardsNominate": {
       "label": "Nominuj w Steam Awards",
-      "tip": "Pod koniec listopada nominuje grę w każdej kategorii Steam Awards, dla odznaki za nominacje. Na przykład gra, w którą to konto grało 300 godzin, trafia do kategorii, do której według Steam pasuje. Tylko gry, w które to konto grało, wybierane tak, jak ustawiono w „Którą grę nominować”; kategoria bez żadnej z nich zostaje pusta. Wyłączone: bez nominacji."
+      "tip": "Pod koniec listopada nominuje grę w każdej kategorii Steam Awards, dla odznaki za nominacje. Na przykład gra, w którą to konto grało 300 godzin, trafia do kategorii, do której według Steam pasuje. Tylko gry, w które to konto grało, wybierane tak, jak ustawiono w „Którą grę nominować”; kategoria bez żadnej z nich jest pomijana, tak jak robi to przycisk Pomiń na stronie. Wyłączone: bez nominacji."
     },
     "SaleAwardsVote": {
       "label": "Głosuj w Steam Awards",

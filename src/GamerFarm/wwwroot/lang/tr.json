@@ -3471,7 +3471,14 @@
     "gamer.farm dashboard sign-in code: {0}\n\nSomebody at {1} ({2}) opened a dashboard sign-in link from outside your home. The code works for {3} minutes.\n\nNot you? Don't give the code to anyone. Send /visitors signout here, then change the dashboard password.": "gamer.farm panel giriş kodu: {0}\n\n{1} ({2}) adresindeki biri evin dışından bir panel giriş bağlantısı açtı. Kod {3} dakika geçerli.\n\nSen değil miydin? Kodu kimseye verme. Buraya /visitors signout gönder, sonra panel parolasını değiştir.",
     "A sign-in link for the dashboard - it works once, for {0} seconds:": "Panel için bir giriş bağlantısı - bir kez, {0} saniye boyunca çalışır:",
     "There's no dashboard password, so it opens on this PC without one anyway.": "Panelin parolası yok, bu yüzden bu bilgisayarda zaten parolasız açılıyor.",
-    "That sign-in link has run out. Sign in with the password, or get a new link.": "Bu giriş bağlantısının süresi doldu. Parolayla giriş yap ya da yeni bir bağlantı al."
+    "That sign-in link has run out. Sign in with the password, or get a new link.": "Bu giriş bağlantısının süresi doldu. Parolayla giriş yap ya da yeni bir bağlantı al.",
+    "skipped the Steam Awards category {0} - nothing this account played fits it": "Steam Ödülleri kategorisi {0} atlandı - bu hesabın oynadığı hiçbir oyun ona uymuyor",
+    "Steam didn't take skipping the Steam Awards category {0} - it tries again at the next look": "Steam, Steam Ödülleri kategorisi {0} için atlamayı kabul etmedi - bir sonraki bakışta yeniden dener",
+    "Steam didn't take the nomination of {0} in the Steam Awards category {1} - it tries again at the next look": "Steam, {0} oyununun Steam Ödülleri kategorisi {1} adaylığını kabul etmedi - bir sonraki bakışta yeniden dener",
+    "Steam didn't take the vote for {0} in the Steam Awards - it tries again at the next look": "Steam, Steam Ödülleri'nde {0} için oyu kabul etmedi - bir sonraki bakışta yeniden dener",
+    "{0} - next one waits: {1}": "{0} - sıradaki bekliyor: {1}",
+    "{0} of them skipped - nothing this account played fits them": "bunlardan {0} tanesi atlandı - bu hesabın oynadığı hiçbir oyun onlara uymuyor",
+    "next award step waits: {0}": "ödüllerin sıradaki adımı bekliyor: {0}"
   },
   "settings": {
     "BackupToTelegram": {
@@ -4112,7 +4119,7 @@
     },
     "SaleAwardsNominate": {
       "label": "Steam Ödülleri'nde aday göster",
-      "tip": "Kasım sonunda, adaylık rozeti için Steam Ödülleri'nin her kategorisinde bir oyunu aday gösterir. Örneğin bu hesabın 300 saat oynadığı bir oyun, Steam'in uyduğunu söylediği kategoriye girer. Yalnızca bu hesabın oynadığı oyunlar, \"Hangi oyun aday gösterilsin\" ayarına göre seçilir; bunlardan hiçbiri olmayan kategori boş kalır. Kapalı: adaylık yok."
+      "tip": "Kasım sonunda, adaylık rozeti için Steam Ödülleri'nin her kategorisinde bir oyunu aday gösterir. Örneğin bu hesabın 300 saat oynadığı bir oyun, Steam'in uyduğunu söylediği kategoriye girer. Yalnızca bu hesabın oynadığı oyunlar, \"Hangi oyun aday gösterilsin\" ayarına göre seçilir; bunlardan hiçbiri olmayan kategori, sayfanın kendi Atla düğmesi gibi atlanır. Kapalı: adaylık yok."
     },
     "SaleAwardsVote": {
       "label": "Steam Ödülleri'nde oy ver",

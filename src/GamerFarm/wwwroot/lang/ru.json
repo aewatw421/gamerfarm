@@ -3471,7 +3471,14 @@
     "gamer.farm dashboard sign-in code: {0}\n\nSomebody at {1} ({2}) opened a dashboard sign-in link from outside your home. The code works for {3} minutes.\n\nNot you? Don't give the code to anyone. Send /visitors signout here, then change the dashboard password.": "Код входа в панель gamer.farm: {0}\n\nКто-то с {1} ({2}) открыл ссылку для входа в панель не из дома. Код действует {3} мин.\n\nЭто не вы? Никому не сообщайте код. Отправьте сюда /visitors signout, затем смените пароль панели.",
     "A sign-in link for the dashboard - it works once, for {0} seconds:": "Ссылка для входа в панель - работает один раз, {0} с:",
     "There's no dashboard password, so it opens on this PC without one anyway.": "У панели нет пароля, поэтому на этом компьютере она и так открывается без него.",
-    "That sign-in link has run out. Sign in with the password, or get a new link.": "Срок действия этой ссылки для входа истёк. Войдите с паролем или получите новую ссылку."
+    "That sign-in link has run out. Sign in with the password, or get a new link.": "Срок действия этой ссылки для входа истёк. Войдите с паролем или получите новую ссылку.",
+    "skipped the Steam Awards category {0} - nothing this account played fits it": "категория Steam Awards {0} пропущена - ни одна игра, в которую играл этот аккаунт, в неё не подходит",
+    "Steam didn't take skipping the Steam Awards category {0} - it tries again at the next look": "Steam не принял пропуск категории Steam Awards {0} - попробует снова при следующей проверке",
+    "Steam didn't take the nomination of {0} in the Steam Awards category {1} - it tries again at the next look": "Steam не принял номинацию {0} в категории Steam Awards {1} - попробует снова при следующей проверке",
+    "Steam didn't take the vote for {0} in the Steam Awards - it tries again at the next look": "Steam не принял голос за {0} в Steam Awards - попробует снова при следующей проверке",
+    "{0} - next one waits: {1}": "{0} - следующая ждёт: {1}",
+    "{0} of them skipped - nothing this account played fits them": "из них пропущено {0} - ни одна игра, в которую играл этот аккаунт, в них не подходит",
+    "next award step waits: {0}": "следующий шаг наград ждёт: {0}"
   },
   "settings": {
     "BackupToTelegram": {
@@ -4112,7 +4119,7 @@
     },
     "SaleAwardsNominate": {
       "label": "Номинировать в Steam Awards",
-      "tip": "В конце ноября выдвигает игру в каждой категории Steam Awards, ради значка за номинации. Например, игра, в которую этот аккаунт играл 300 часов, идёт в категорию, которая ей подходит по словам Steam. Только игры, в которые этот аккаунт играл, выбранные как в «Какую игру номинировать»; категория без таких остаётся пустой. Выключено: без номинаций."
+      "tip": "В конце ноября выдвигает игру в каждой категории Steam Awards, ради значка за номинации. Например, игра, в которую этот аккаунт играл 300 часов, идёт в категорию, которая ей подходит по словам Steam. Только игры, в которые этот аккаунт играл, выбранные как в «Какую игру номинировать»; категория без таких пропускается, как это делает кнопка «Пропустить» на самой странице. Выключено: без номинаций."
     },
     "SaleAwardsVote": {
       "label": "Голосовать в Steam Awards",

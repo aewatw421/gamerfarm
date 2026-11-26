@@ -3471,7 +3471,14 @@
     "gamer.farm dashboard sign-in code: {0}\n\nSomebody at {1} ({2}) opened a dashboard sign-in link from outside your home. The code works for {3} minutes.\n\nNot you? Don't give the code to anyone. Send /visitors signout here, then change the dashboard password.": "gamer.farm 面板登录验证码：{0}\n\n{1}（{2}）有人从家外打开了面板登录链接。验证码 {3} 分钟内有效。\n\n不是你？不要把验证码告诉任何人。在这里发送 /visitors signout，然后修改面板密码。",
     "A sign-in link for the dashboard - it works once, for {0} seconds:": "面板登录链接 - 只能用一次，{0} 秒内有效：",
     "There's no dashboard password, so it opens on this PC without one anyway.": "面板没有设置密码，所以在这台电脑上本来就不用密码就能打开。",
-    "That sign-in link has run out. Sign in with the password, or get a new link.": "这个登录链接已过期。用密码登录，或者获取一个新链接。"
+    "That sign-in link has run out. Sign in with the password, or get a new link.": "这个登录链接已过期。用密码登录，或者获取一个新链接。",
+    "skipped the Steam Awards category {0} - nothing this account played fits it": "跳过了 Steam 大奖类别 {0} - 这个账户玩过的游戏没有适合它的",
+    "Steam didn't take skipping the Steam Awards category {0} - it tries again at the next look": "Steam 没有接受跳过 Steam 大奖类别 {0} - 下次查看时再试",
+    "Steam didn't take the nomination of {0} in the Steam Awards category {1} - it tries again at the next look": "Steam 没有接受在 Steam 大奖类别 {1} 中提名 {0} - 下次查看时再试",
+    "Steam didn't take the vote for {0} in the Steam Awards - it tries again at the next look": "Steam 没有接受在 Steam 大奖中投给 {0} 的票 - 下次查看时再试",
+    "{0} - next one waits: {1}": "{0} - 下一个在等待：{1}",
+    "{0} of them skipped - nothing this account played fits them": "其中 {0} 个已跳过 - 这个账户玩过的游戏没有适合它们的",
+    "next award step waits: {0}": "大奖的下一步在等待：{0}"
   },
   "settings": {
     "BackupToTelegram": {
@@ -4112,7 +4119,7 @@
     },
     "SaleAwardsNominate": {
       "label": "在 Steam 大奖中提名",
-      "tip": "在 11 月下旬，为 Steam 大奖的每个类别提名一款游戏，以获得提名徽章。例如，这个账户玩了 300 小时的游戏，会放进 Steam 认为它适合的类别。只用这个账户玩过的游戏，按“提名哪款游戏”的设置来挑；没有合适游戏的类别留空。关闭：不提名。"
+      "tip": "在 11 月下旬，为 Steam 大奖的每个类别提名一款游戏，以获得提名徽章。例如，这个账户玩了 300 小时的游戏，会放进 Steam 认为它适合的类别。只用这个账户玩过的游戏，按“提名哪款游戏”的设置来挑；没有合适游戏的类别会跳过，就像页面自己的跳过按钮那样。关闭：不提名。"
     },
     "SaleAwardsVote": {
       "label": "在 Steam 大奖中投票",
