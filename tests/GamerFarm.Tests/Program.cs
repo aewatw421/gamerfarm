@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Reflection;
 using GamerFarm;
 
@@ -7824,10 +7824,16 @@ if (Environment.GetEnvironmentVariable("NOCAT_BANPAGES") is { Length: > 0 } banP
 		string repo = Path.Combine(srcDir, "..", "..");
 		string compose = File.ReadAllText(Path.Combine(repo, "docker-compose.example.yml"));
 		string dockerfile = File.ReadAllText(Path.Combine(repo, "Dockerfile"));
-		Check("docker: ./backups and ./plugins are mounted, and /data/backups and /data/plugins are volumes of the image",
-			compose.Contains("- ./backups:/data/backups", StringComparison.Ordinal) && dockerfile.Contains("\"/data/backups\", \"/data/plugins\"]", StringComparison.Ordinal)
+		// The image deliberately declares no VOLUME: with GAMERFARM_S3_BUCKET set, the whole state (config/, the saved
+		// logins, plugins/) lives in a bucket, so a container needs no disk at all - that is what lets it run on a platform
+		// whose filesystem is thrown away with the container. Mounting /data is still supported and still what
+		// docker-compose.example.yml does; what changed is only that the image no longer insists on it, because a VOLUME
+		// makes Docker invent an anonymous volume and that is exactly the wrong default for this. See docs/docker-s3.md.
+		Check("docker: ./backups and ./plugins are mounted, and the image needs no VOLUME of its own",
+			compose.Contains("- ./backups:/data/backups", StringComparison.Ordinal)
 			&& compose.Contains("\n      - ./plugins:/data/plugins", StringComparison.Ordinal)
-			&& dockerfile.Contains("mkdir -p /data/config /data/logs /data/backups", StringComparison.Ordinal));
+			&& dockerfile.Contains("mkdir -p /data/config /data/logs /data/backups", StringComparison.Ordinal)
+			&& !dockerfile.Contains("\nVOLUME", StringComparison.Ordinal));
 		Check("docker: the time zone comes from .env, UTC without it", compose.Contains("TZ: ${TZ:-Etc/UTC}", StringComparison.Ordinal) && !compose.Contains("TZ: Europe/London", StringComparison.Ordinal));
 		Check("docker: the public address and trusted proxies are in the compose file", compose.Contains("# GAMERFARM_PUBLIC_ADDRESS:", StringComparison.Ordinal)
 			&& compose.Contains("# GAMERFARM_TRUSTED_PROXIES: 172.16.0.0/12", StringComparison.Ordinal));
